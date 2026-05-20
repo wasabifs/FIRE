@@ -242,8 +242,111 @@ function AddAssetModal({ accountId, onClose, onSaved }) {
   )
 }
 
+// ── 再平衡面板 ─────────────────────────────────────────────
+function RebalancePanel({ grouped, accountTotalTWD, totalTWD }) {
+  const STORAGE_KEY = 'rebalance_targets'
+  const [targets, setTargets] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}') } catch { return {} }
+  })
+
+  function setTarget(type, val) {
+    const next = { ...targets, [type]: Number(val) || 0 }
+    setTargets(next)
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
+  }
+
+  const totalTarget = Object.values(targets).reduce((s, v) => s + v, 0)
+  const investGroups = grouped.filter(g => g.value !== 'debt')
+
+  return (
+    <div style={{ marginTop:8, background:'var(--bg-surface)', borderRadius:'var(--radius-lg)', border:'1px solid var(--border)', overflow:'hidden' }}>
+      {/* Header */}
+      <div style={{ padding:'12px 16px', borderBottom:'1px solid var(--border)', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+        <span style={{ fontSize:12, color:'var(--text-muted)' }}>設定目標佔比（總計 {totalTarget}%）</span>
+        <span style={{ fontSize:12, color: Math.abs(totalTarget - 100) < 1 ? 'var(--profit)' : 'var(--accent-amber)' }}>
+          {Math.abs(totalTarget - 100) < 1 ? '✓ 合計 100%' : `差 ${(100 - totalTarget).toFixed(0)}%`}
+        </span>
+      </div>
+
+      {investGroups.map(({ value, label, icon: Icon, color, accounts: accs }) => {
+        const groupTotal = accs.reduce((s, a) => s + accountTotalTWD(a), 0)
+        const currentPct = totalTWD > 0 ? (groupTotal / totalTWD) * 100 : 0
+        const targetPct = targets[value] || 0
+        const diff = currentPct - targetPct
+        const diffAbs = Math.abs(diff)
+        const diffColor = diffAbs < 2 ? 'var(--profit)' : diffAbs < 5 ? 'var(--accent-amber)' : 'var(--loss)'
+
+        return (
+          <div key={value} style={{ padding:'12px 16px', borderBottom:'1px solid var(--border)' }}>
+            <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:8 }}>
+              <div style={{ width:28, height:28, borderRadius:6, background:`${color}18`, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+                <Icon size={14} color={color} />
+              </div>
+              <span style={{ fontSize:13, fontWeight:500, flex:1 }}>{label}</span>
+              {/* Target input */}
+              <div style={{ display:'flex', alignItems:'center', gap:4, flexShrink:0 }}>
+                <span style={{ fontSize:11, color:'var(--text-muted)' }}>目標</span>
+                <input
+                  type="number" min="0" max="100"
+                  value={targetPct || ''}
+                  placeholder="0"
+                  onChange={e => setTarget(value, e.target.value)}
+                  style={{
+                    width:48, padding:'4px 6px', borderRadius:6, fontSize:13, fontFamily:'DM Mono',
+                    background:'var(--bg-input)', border:'1px solid var(--border)',
+                    color:'var(--text-primary)', textAlign:'center', outline:'none',
+                  }}
+                />
+                <span style={{ fontSize:11, color:'var(--text-muted)' }}>%</span>
+              </div>
+            </div>
+
+            {/* Progress bar */}
+            <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+              <div style={{ flex:1, height:6, background:'var(--bg-input)', borderRadius:3, overflow:'hidden', position:'relative' }}>
+                {/* Target marker */}
+                {targetPct > 0 && (
+                  <div style={{
+                    position:'absolute', top:0, bottom:0,
+                    left:`${Math.min(targetPct, 100)}%`,
+                    width:2, background:'var(--text-muted)', borderRadius:1,
+                    transform:'translateX(-50%)', zIndex:2,
+                  }} />
+                )}
+                {/* Current bar */}
+                <div style={{
+                  height:'100%', width:`${Math.min(currentPct, 100)}%`,
+                  background: color, borderRadius:3, transition:'width 0.4s ease',
+                }} />
+              </div>
+              <div style={{ display:'flex', gap:8, flexShrink:0, minWidth:130 }}>
+                <span style={{ fontSize:11, fontFamily:'DM Mono', color:'var(--text-secondary)', minWidth:36, textAlign:'right' }}>
+                  {currentPct.toFixed(1)}%
+                </span>
+                {targetPct > 0 && (
+                  <span style={{ fontSize:11, fontFamily:'DM Mono', color: diffColor, minWidth:52 }}>
+                    {diff > 0 ? '▲' : '▼'} {diffAbs.toFixed(1)}%
+                  </span>
+                )}
+              </div>
+            </div>
+            {/* Diff amount hint */}
+            {targetPct > 0 && diffAbs > 1 && (
+              <p style={{ fontSize:11, color: diffColor, marginTop:4, textAlign:'right' }}>
+                {diff > 0
+                  ? `超配 NT$ ${formatNTD(Math.abs(diff / 100 * totalTWD))}，可考慮減碼`
+                  : `低配 NT$ ${formatNTD(Math.abs(diff / 100 * totalTWD))}，可考慮加碼`}
+              </p>
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 // ── 可拖曳帳戶列表 ──────────────────────────────────────────
-function DraggableAccountList({ accounts, rates, onReorder, onAddHolding, onEdit }) {
+function DraggableAccountList({ accounts, rates, totalAllTWD, onReorder, onAddHolding, onEdit }) {
   const [items, setItems] = useState(accounts)
   const [expanded, setExpanded] = useState({})
   const dragIdx = useRef(null)
@@ -292,32 +395,44 @@ function DraggableAccountList({ accounts, rates, onReorder, onAddHolding, onEdit
             onDragOver={e => e.preventDefault()}
             style={{ background:'var(--bg-card)', borderRadius:'var(--radius-md)', overflow:'hidden' }}>
             <div style={{ display:'flex', alignItems:'center' }}>
-              <div style={{ padding:'0 4px 0 10px', cursor:'grab', color:'var(--text-muted)', display:'flex', alignItems:'center', flexShrink:0 }}>
+              <div style={{ padding:'0 4px 0 10px', cursor:'grab', color:'var(--border-light)', display:'flex', alignItems:'center', flexShrink:0 }}>
                 <GripVertical size={14} />
               </div>
               <button onClick={() => toggle(acc.id)} style={{
                 flex:1, display:'flex', alignItems:'center', gap:10,
-                padding:'11px 8px 11px 4px', background:'transparent', border:'none', cursor:'pointer', textAlign:'left',
+                padding:'12px 8px 12px 4px', background:'transparent', border:'none', cursor:'pointer', textAlign:'left',
               }}>
+                {/* 佔比 badge */}
+                <div style={{
+                  minWidth:36, textAlign:'center', padding:'2px 6px',
+                  background:'var(--bg-input)', borderRadius:6, flexShrink:0,
+                }}>
+                  <span style={{ fontSize:11, fontWeight:600, color:'var(--text-secondary)', fontFamily:'DM Mono' }}>
+                    {totalAllTWD > 0 ? Math.round(total / totalAllTWD * 100) : 0}%
+                  </span>
+                </div>
                 <div style={{ flex:1, minWidth:0 }}>
-                  <p style={{ fontSize:13, fontWeight:500, color:'var(--text-primary)' }}>{acc.name}</p>
-                  <p style={{ fontSize:11, color:'var(--text-muted)' }}>
+                  <p style={{ fontSize:14, fontWeight:500, color:'var(--text-primary)' }}>{acc.name}</p>
+                  <p style={{ fontSize:11, color:'var(--text-secondary)', marginTop:1 }}>
                     {acc.currency}
-                    {isForeign && rate !== 1 && <span style={{ marginLeft:4, color:'var(--accent-amber)' }}>× {rate.toFixed(2)}</span>}
+                    {isForeign && total > 0 && (
+                      <span style={{ marginLeft:6, color:'var(--accent-amber)' }}>
+                        {acc.currency} {formatNTD(total / rate)}
+                      </span>
+                    )}
                   </p>
                 </div>
-                <div style={{ textAlign:'right', flexShrink:0 }}>
-                  <p className="text-mono" style={{ fontSize:13, fontWeight:500, color: isDebt?'var(--loss)':'var(--text-primary)' }}>
+                <div style={{ textAlign:'right', flexShrink:0, marginRight:4 }}>
+                  <p className="text-mono" style={{ fontSize:14, fontWeight:600, color: isDebt?'var(--loss)':'var(--text-primary)' }}>
                     {isDebt?'-':''}NT$ {formatNTD(total)}
                   </p>
                 </div>
                 <ChevronRight size={14} color="var(--text-muted)"
                   style={{ transform: isOpen?'rotate(90deg)':'none', transition:'transform 0.2s', flexShrink:0 }} />
               </button>
-              {/* Edit button */}
               <button onClick={() => onEdit(acc)}
-                style={{ padding:'0 12px 0 4px', background:'transparent', border:'none', cursor:'pointer', color:'var(--text-muted)', display:'flex', alignItems:'center', flexShrink:0 }}>
-                <Edit2 size={13} />
+                style={{ padding:'0 12px 0 0', background:'transparent', border:'none', cursor:'pointer', color:'var(--text-secondary)', display:'flex', alignItems:'center', flexShrink:0 }}>
+                <Edit2 size={14} />
               </button>
             </div>
 
@@ -373,6 +488,7 @@ export default function Assets() {
   const [editAccount, setEditAccount] = useState(null)
   const [addAssetFor, setAddAssetFor] = useState(null)
   const [expandedTypes, setExpandedTypes] = useState({})
+  const [showRebalance, setShowRebalance] = useState(false)
 
   useEffect(() => { loadAll() }, [])
 
@@ -505,6 +621,7 @@ export default function Assets() {
                     <DraggableAccountList
                       accounts={accs}
                       rates={rates}
+                      totalAllTWD={netAssets + totalDebt}
                       onReorder={ids => setAccounts(prev => {
                         const others = prev.filter(a => a.type !== value)
                         const reordered = ids.map(id => prev.find(a => a.id === id)).filter(Boolean)
@@ -518,6 +635,32 @@ export default function Assets() {
               </div>
             )
           })}
+        </div>
+      )}
+
+      {/* Rebalance section */}
+      {grouped.length > 0 && (
+        <div style={{ marginTop:4 }}>
+          <button onClick={() => setShowRebalance(r => !r)} style={{
+            display:'flex', alignItems:'center', justifyContent:'space-between', width:'100%',
+            padding:'14px 16px', background:'var(--bg-card)', border:'1px solid var(--border)',
+            borderRadius:'var(--radius-lg)', cursor:'pointer',
+          }}>
+            <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+              <div style={{ width:34, height:34, borderRadius:'var(--radius-sm)', background:'rgba(139,92,246,0.15)', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                <span style={{ fontSize:16 }}>⚖️</span>
+              </div>
+              <div style={{ textAlign:'left' }}>
+                <p style={{ fontSize:14, fontWeight:600, color:'var(--text-primary)' }}>再平衡規劃</p>
+                <p style={{ fontSize:11, color:'var(--text-muted)' }}>設定目標佔比，檢視偏差</p>
+              </div>
+            </div>
+            <ChevronRight size={16} color="var(--text-muted)" style={{ transform: showRebalance?'rotate(90deg)':'none', transition:'transform 0.2s' }} />
+          </button>
+
+          {showRebalance && (
+            <RebalancePanel grouped={grouped} accountTotalTWD={accountTotalTWD} totalTWD={netAssets + totalDebt} />
+          )}
         </div>
       )}
 
