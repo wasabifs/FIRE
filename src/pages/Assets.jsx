@@ -49,8 +49,8 @@ function AddAccountModal({ onClose, onSaved }) {
 
         <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
           <div>
-            <p className="label" style={{ marginBottom:6 }}>帳戶名稱</p>
-            <input className="input" placeholder="例：元大證券、台新銀行" value={form.name} onChange={e => set('name', e.target.value)} />
+            <p className="label" style={{ marginBottom:6 }}>帳戶名稱 <span style={{ color:'var(--accent-blue)' }}>*</span></p>
+            <input className="input" placeholder="例：我的元大帳戶、台新薪轉戶" value={form.name} onChange={e => set('name', e.target.value)} autoFocus />
           </div>
 
           <div>
@@ -70,12 +70,12 @@ function AddAccountModal({ onClose, onSaved }) {
               </select>
             </div>
             <div>
-              <p className="label" style={{ marginBottom:6 }}>券商（選填）</p>
-              <input className="input" placeholder="例：Firstrade" value={form.broker} onChange={e => set('broker', e.target.value)} />
+              <p className="label" style={{ marginBottom:6 }}>機構名稱（選填）</p>
+              <input className="input" placeholder="例：元大、Firstrade" value={form.broker} onChange={e => set('broker', e.target.value)} />
             </div>
           </div>
 
-          <button className="btn btn-primary" style={{ width:'100%', marginTop:4 }} onClick={save} disabled={saving || !form.name.trim()}>
+          <button className="btn btn-primary" style={{ width:'100%', marginTop:4, opacity: (!form.name.trim() || saving) ? 0.4 : 1, cursor: !form.name.trim() ? 'not-allowed' : 'pointer' }} onClick={save} disabled={saving || !form.name.trim()}>
             {saving ? '儲存中...' : '新增帳戶'}
           </button>
         </div>
