@@ -5,12 +5,13 @@ import { formatNTD } from '../lib/format'
 import PageHeader from '../components/layout/PageHeader'
 
 const ACCOUNT_TYPES = [
-  { value: 'brokerage', label: '證券帳戶', icon: TrendingDown, color: '#3b82f6' },
-  { value: 'bank',      label: '銀行帳戶', icon: Landmark,    color: '#10b981' },
-  { value: 'insurance', label: '保單',     icon: Shield,      color: '#8b5cf6' },
-  { value: 'real_estate', label: '不動產', icon: Building2,   color: '#f59e0b' },
-  { value: 'crypto',    label: '加密貨幣', icon: Wallet,      color: '#ec4899' },
-  { value: 'debt',      label: '負債',     icon: TrendingDown,color: '#ef4444' },
+  { value: 'brokerage',   label: '證券帳戶', icon: TrendingDown, color: '#3b82f6' },
+  { value: 'bank',        label: '銀行帳戶', icon: Landmark,     color: '#10b981' },
+  { value: 'fund',        label: '基金帳戶', icon: Wallet,       color: '#06b6d4' },
+  { value: 'insurance',   label: '保單',     icon: Shield,       color: '#8b5cf6' },
+  { value: 'real_estate', label: '不動產',   icon: Building2,    color: '#f59e0b' },
+  { value: 'crypto',      label: '加密貨幣', icon: Wallet,       color: '#ec4899' },
+  { value: 'debt',        label: '負債',     icon: TrendingDown, color: '#ef4444' },
 ]
 
 const CURRENCIES = ['TWD', 'USD', 'JPY']
@@ -38,9 +39,9 @@ function AddAccountModal({ onClose, onSaved }) {
   }
 
   return (
-    <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.7)', zIndex:200, display:'flex', alignItems:'flex-end', justifyContent:'center' }}
+    <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.75)', zIndex:200, display:'flex', alignItems:'center', justifyContent:'center', padding:'0 16px' }}
       onClick={e => e.target === e.currentTarget && onClose()}>
-      <div style={{ width:'100%', maxWidth:430, background:'var(--bg-surface)', borderRadius:'20px 20px 0 0', padding:'24px 20px 40px', border:'1px solid var(--border)' }}>
+      <div style={{ width:'100%', maxWidth:400, background:'var(--bg-surface)', borderRadius:'var(--radius-xl)', padding:'24px 20px 28px', border:'1px solid var(--border)' }}>
         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:20 }}>
           <h2 style={{ fontSize:18, fontWeight:600 }}>新增帳戶</h2>
           <button className="btn btn-icon" onClick={onClose}><X size={16} /></button>
@@ -54,20 +55,11 @@ function AddAccountModal({ onClose, onSaved }) {
 
           <div>
             <p className="label" style={{ marginBottom:6 }}>類型</p>
-            <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:8 }}>
-              {ACCOUNT_TYPES.map(({ value, label, icon: Icon, color }) => (
-                <button key={value} onClick={() => set('type', value)} style={{
-                  display:'flex', flexDirection:'column', alignItems:'center', gap:6,
-                  padding:'10px 8px', borderRadius:'var(--radius-md)',
-                  background: form.type === value ? 'rgba(59,130,246,0.12)' : 'var(--bg-input)',
-                  border: form.type === value ? '1px solid var(--accent-blue)' : '1px solid var(--border)',
-                  cursor:'pointer', transition:'all 0.15s',
-                }}>
-                  <Icon size={18} color={form.type === value ? color : 'var(--text-muted)'} />
-                  <span style={{ fontSize:11, color: form.type === value ? 'var(--text-primary)' : 'var(--text-muted)', fontWeight: form.type === value ? 500 : 400 }}>{label}</span>
-                </button>
+            <select className="input" value={form.type} onChange={e => set('type', e.target.value)}>
+              {ACCOUNT_TYPES.map(({ value, label }) => (
+                <option key={value} value={value}>{label}</option>
               ))}
-            </div>
+            </select>
           </div>
 
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
@@ -128,9 +120,9 @@ function AddAssetModal({ accountId, onClose, onSaved }) {
   const isCash = form.asset_type === 'cash'
 
   return (
-    <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.7)', zIndex:200, display:'flex', alignItems:'flex-end', justifyContent:'center' }}
+    <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.75)', zIndex:200, display:'flex', alignItems:'center', justifyContent:'center', padding:'0 16px' }}
       onClick={e => e.target === e.currentTarget && onClose()}>
-      <div style={{ width:'100%', maxWidth:430, background:'var(--bg-surface)', borderRadius:'20px 20px 0 0', padding:'24px 20px 40px', border:'1px solid var(--border)', maxHeight:'90vh', overflowY:'auto' }}>
+      <div style={{ width:'100%', maxWidth:400, background:'var(--bg-surface)', borderRadius:'var(--radius-xl)', padding:'24px 20px 28px', border:'1px solid var(--border)', maxHeight:'90vh', overflowY:'auto' }}>
         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:20 }}>
           <h2 style={{ fontSize:18, fontWeight:600 }}>新增持倉</h2>
           <button className="btn btn-icon" onClick={onClose}><X size={16} /></button>
