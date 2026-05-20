@@ -405,21 +405,20 @@ function DraggableAccountList({ accounts, rates, totalAllTWD, onReorder, onAddHo
                 {/* 佔比 badge */}
                 <div style={{
                   minWidth:36, textAlign:'center', padding:'2px 6px',
-                  background:'var(--bg-input)', borderRadius:6, flexShrink:0,
+                  background:'rgba(255,255,255,0.06)', borderRadius:6, flexShrink:0,
+                  border:'1px solid var(--border)',
                 }}>
-                  <span style={{ fontSize:11, fontWeight:600, color:'var(--text-secondary)', fontFamily:'DM Mono' }}>
+                  <span style={{ fontSize:11, fontWeight:600, color:'var(--text-primary)', fontFamily:'DM Mono' }}>
                     {totalAllTWD > 0 ? Math.round(total / totalAllTWD * 100) : 0}%
                   </span>
                 </div>
                 <div style={{ flex:1, minWidth:0 }}>
                   <p style={{ fontSize:14, fontWeight:500, color:'var(--text-primary)' }}>{acc.name}</p>
                   <p style={{ fontSize:11, color:'var(--text-secondary)', marginTop:1 }}>
-                    {acc.currency}
-                    {isForeign && total > 0 && (
-                      <span style={{ marginLeft:6, color:'var(--accent-amber)' }}>
-                        {acc.currency} {formatNTD(total / rate)}
-                      </span>
-                    )}
+                    {isForeign && total > 0
+                      ? <><span style={{ color:'var(--accent-amber)' }}>{acc.currency}</span> {formatNTD(total / rate)}</>
+                      : acc.currency
+                    }
                   </p>
                 </div>
                 <div style={{ textAlign:'right', flexShrink:0, marginRight:4 }}>
@@ -553,16 +552,20 @@ export default function Assets() {
         title="資產"
         subtitle={`淨資產 NT$ ${formatNTD(netAssets)}`}
         action={
-          <div style={{ display:'flex', gap:8 }}>
+          <div style={{ display:'flex', gap:6, alignItems:'center' }}>
             {hasForeign && (
               <button className="btn btn-icon" onClick={refreshRates} title="更新匯率"
                 style={{ opacity: rateLoading?0.5:1 }}>
                 <RefreshCw size={14} style={{ animation: rateLoading?'spin 1s linear infinite':undefined }} />
               </button>
             )}
-            <button className="btn btn-primary" style={{ padding:'8px 14px', fontSize:13 }}
+            <button className="btn btn-ghost" style={{ padding:'7px 12px', fontSize:12, display:'flex', alignItems:'center', gap:5 }}
+              onClick={() => setShowRebalance(r => !r)}>
+              <span>⚖️</span> 再平衡
+            </button>
+            <button className="btn btn-primary" style={{ padding:'7px 12px', fontSize:12 }}
               onClick={() => setShowAddAccount(true)}>
-              <Plus size={15} /> 新增帳戶
+              <Plus size={14} /> 新增
             </button>
           </div>
         }
@@ -638,30 +641,9 @@ export default function Assets() {
         </div>
       )}
 
-      {/* Rebalance section */}
-      {grouped.length > 0 && (
-        <div style={{ marginTop:4 }}>
-          <button onClick={() => setShowRebalance(r => !r)} style={{
-            display:'flex', alignItems:'center', justifyContent:'space-between', width:'100%',
-            padding:'14px 16px', background:'var(--bg-card)', border:'1px solid var(--border)',
-            borderRadius:'var(--radius-lg)', cursor:'pointer',
-          }}>
-            <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-              <div style={{ width:34, height:34, borderRadius:'var(--radius-sm)', background:'rgba(139,92,246,0.15)', display:'flex', alignItems:'center', justifyContent:'center' }}>
-                <span style={{ fontSize:16 }}>⚖️</span>
-              </div>
-              <div style={{ textAlign:'left' }}>
-                <p style={{ fontSize:14, fontWeight:600, color:'var(--text-primary)' }}>再平衡規劃</p>
-                <p style={{ fontSize:11, color:'var(--text-muted)' }}>設定目標佔比，檢視偏差</p>
-              </div>
-            </div>
-            <ChevronRight size={16} color="var(--text-muted)" style={{ transform: showRebalance?'rotate(90deg)':'none', transition:'transform 0.2s' }} />
-          </button>
-
-          {showRebalance && (
-            <RebalancePanel grouped={grouped} accountTotalTWD={accountTotalTWD} totalTWD={netAssets + totalDebt} />
-          )}
-        </div>
+      {/* Rebalance panel - shown when toggled from header */}
+      {showRebalance && grouped.length > 0 && (
+        <RebalancePanel grouped={grouped} accountTotalTWD={accountTotalTWD} totalTWD={netAssets + totalDebt} />
       )}
 
       {/* spin animation */}
