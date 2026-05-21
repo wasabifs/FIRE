@@ -511,7 +511,7 @@ function AddPnlModal({ accounts, onClose, onSaved }) {
 }
 
 // ── 持倉分頁 ───────────────────────────────────────────────
-function HoldingsTab({ accounts, refreshTick, onRefreshDone }) {
+function HoldingsTab({ accounts, refreshTick, onRefreshDone, usdRate }) {
   const [marketFilter, setMarketFilter] = useState('全部')
   const [accountFilter, setAccountFilter] = useState('全部')
   const [sortBy, setSortBy] = useState('市值')
@@ -519,6 +519,12 @@ function HoldingsTab({ accounts, refreshTick, onRefreshDone }) {
   const [quoteStatus, setQuoteStatus] = useState('idle')
   const [editHolding, setEditHolding] = useState(null)
   const [localTick, setLocalTick] = useState(0)
+
+  // 取得幣別匯率（TWD=1，USD=usdRate，其他暫用1）
+  function getFxRate(market) {
+    if (market === 'US') return usdRate || 1
+    return 1
+  }
 
   const allHoldings = accounts.flatMap(acc =>
     (acc.holdings||[]).filter(h=>h.asset_type!=='cash').map(h=>({...h, accountName:acc.name, accountId:acc.id}))
@@ -554,11 +560,13 @@ function HoldingsTab({ accounts, refreshTick, onRefreshDone }) {
 
   filtered = filtered.map(h => {
     const price = getPrice(h)
+    const fx = getFxRate(h.market)
     const qty = Number(h.quantity), avg = Number(h.avg_cost)
-    const marketVal = price * qty, cost = avg * qty
+    const marketVal = price * qty * fx   // 換算成 TWD
+    const cost = avg * qty * fx          // 換算成 TWD
     const pnl = marketVal - cost
     const pct = cost > 0 ? (pnl/cost)*100 : 0
-    return { ...h, price, marketVal, cost, pnl, pct }
+    return { ...h, price, marketVal, cost, pnl, pct, fx }
   }).sort((a,b) => {
     if (sortBy==='市值') return b.marketVal - a.marketVal
     if (sortBy==='損益') return b.pnl - a.pnl
@@ -637,7 +645,7 @@ function HoldingsTab({ accounts, refreshTick, onRefreshDone }) {
                 </div>
                 <div style={{ textAlign:'right', flexShrink:0 }}>
                   <p style={{ fontSize:13, fontFamily:'DM Mono', fontWeight:600, color:'var(--text-primary)' }}>
-                    {h.price > 0 ? formatNTD(h.price) : '—'}
+                    {h.price > 0 ? (h.market==='US' ? `$${h.price.toFixed(2)}` : formatNTD(h.price)) : '—'}
                   </p>
                   <p style={{ fontSize:11, color:'var(--text-muted)', marginTop:1 }}>
                     {Number(h.quantity).toLocaleString('en-US', {maximumFractionDigits:4})} 股
@@ -659,9 +667,9 @@ function HoldingsTab({ accounts, refreshTick, onRefreshDone }) {
                 }}><Edit2 size={12}/></button>
               </div>
               <div style={{ display:'flex', gap:12, marginTop:7, paddingTop:7, borderTop:'1px solid var(--border)' }}>
-                <span style={{ fontSize:11, color:'var(--text-muted)' }}>均價 <span style={{ color:'var(--text-secondary)', fontFamily:'DM Mono' }}>{formatNTD(h.avg_cost)}</span></span>
-                <span style={{ fontSize:11, color:'var(--text-muted)' }}>市值 <span style={{ color:'var(--text-secondary)', fontFamily:'DM Mono' }}>{formatNTD(h.marketVal)}</span></span>
-                <span style={{ fontSize:11, color:'var(--text-muted)' }}>成本 <span style={{ color:'var(--text-secondary)', fontFamily:'DM Mono' }}>{formatNTD(h.cost)}</span></span>
+                <span style={{ fontSize:11, color:'var(--text-muted)' }}>均價 <span style={{ color:'var(--text-secondary)', fontFamily:'DM Mono' }}>{h.market==='US' ? `$${Number(h.avg_cost).toFixed(2)}` : formatNTD(h.avg_cost)}</span></span>
+                <span style={{ fontSize:11, color:'var(--text-muted)' }}>市值 <span style={{ color:'var(--text-secondary)', fontFamily:'DM Mono' }}>NT${formatNTD(h.marketVal)}</span></span>
+                <span style={{ fontSize:11, color:'var(--text-muted)' }}>成本 <span style={{ color:'var(--text-secondary)', fontFamily:'DM Mono' }}>NT${formatNTD(h.cost)}</span></span>
               </div>
             </div>
           ))}
@@ -905,6 +913,7 @@ export default function Invest() {
   const [quoteLoading, setQuoteLoading] = useState(false)
   const [lastUpdated, setLastUpdated] = useState(null)
   const [refreshTick, setRefreshTick] = useState(0)
+  const [usdRate, setUsdRate] = useState(1)
 
   async function loadAccounts() {
     const { data:{user} } = await supabase.auth.getUser()
@@ -916,7 +925,16 @@ export default function Invest() {
     setLoading(false)
   }
 
+  async function loadUsdRate() {
+    try {
+      const res = await fetch('/api/rates?currencies=USD')
+      const data = await res.json()
+      if (data?.USD) setUsdRate(data.USD)
+    } catch { /* 保持預設值 */ }
+  }
+
   useEffect(()=>{ loadAccounts() }, [refreshTick])
+  useEffect(()=>{ loadUsdRate() }, [])
 
   async function handleRefresh() {
     setQuoteLoading(true)
@@ -927,7 +945,7 @@ export default function Invest() {
   }
 
   return (
-    <div className="page fade-in">
+    <div className="page fade-in" style={{ paddingBottom:'calc(72px + env(safe-area-inset-bottom, 0px))' }}>
       <PageHeader
         title="投資"
         action={
@@ -949,7 +967,7 @@ export default function Invest() {
         ? [1,2,3].map(i=><div key={i} className="skeleton" style={{ height:68, borderRadius:'var(--radius-md)', marginBottom:8 }}/>)
         : (
           <>
-            {tab==='持倉' && <HoldingsTab accounts={accounts} refreshTick={refreshTick} onRefreshDone={()=>setRefreshTick(t=>t+1)}/>}
+            {tab==='持倉' && <HoldingsTab accounts={accounts} refreshTick={refreshTick} onRefreshDone={()=>setRefreshTick(t=>t+1)} usdRate={usdRate}/>}
             {tab==='交易' && <TransactionsTab accounts={accounts} onHoldingChanged={()=>setRefreshTick(t=>t+1)}/>}
             {tab==='損益' && <PnlTab accounts={accounts}/>}
           </>
