@@ -239,9 +239,7 @@ function TransactionModal({ accounts, transaction, onClose, onSaved }) {
     name: transaction?.name || '',
     market: transaction?.market || 'TW',
     quantity: transaction ? String(transaction.quantity) : '',
-    price: transaction ? String(transaction.price) : '',
-    fee: transaction ? String(transaction.fee||0) : '',
-    tax: transaction ? String(transaction.tax||0) : '',
+    total_cost: transaction ? String((Number(transaction.quantity) * Number(transaction.price)).toFixed(2)) : '',
     trade_date: transaction?.trade_date || new Date().toISOString().slice(0,10),
     note: transaction?.note || '',
   })
@@ -250,17 +248,23 @@ function TransactionModal({ accounts, transaction, onClose, onSaved }) {
 
   const { looking, error, trigger } = useSymbolLookup(form.symbol, form.market, r => set('name', r.name))
 
-  const total = (Number(form.quantity)*Number(form.price))+Number(form.fee||0)+Number(form.tax||0)
+  // 單位價格 = 總成本 / 股數
+  const unitPrice = (form.quantity && form.total_cost && Number(form.quantity) > 0)
+    ? Number(form.total_cost) / Number(form.quantity) : null
 
   async function save() {
-    if (!form.symbol||!form.quantity||!form.price) return
+    if (!form.symbol||!form.quantity||!form.total_cost) return
     setSaving(true)
+
+    const newQty  = Number(form.quantity)
+    const newCost = Number(form.total_cost)
+    const price   = newQty > 0 ? newCost / newQty : 0
 
     const txData = {
       account_id: form.account_id, type: form.type,
       symbol: form.symbol.trim().toUpperCase(), market: form.market,
-      quantity: Number(form.quantity), price: Number(form.price),
-      fee: Number(form.fee)||0, tax: Number(form.tax)||0,
+      quantity: newQty, price: price,
+      fee: 0, tax: 0,
       trade_date: form.trade_date, note: form.note.trim()||null,
     }
 
@@ -272,8 +276,6 @@ function TransactionModal({ accounts, transaction, onClose, onSaved }) {
       // ── 同步持倉 ──
       if (form.type === 'buy') {
         const sym = form.symbol.trim().toUpperCase()
-        const newQty = Number(form.quantity)
-        const newCost = newQty * Number(form.price) + Number(form.fee||0)
 
         // 查同帳戶同代號的既有持倉
         const { data: existing } = await supabase.from('holdings')
@@ -283,7 +285,7 @@ function TransactionModal({ accounts, transaction, onClose, onSaved }) {
           // 合併：加總股數，重算均價
           const totalQty  = Number(existing.quantity) + newQty
           const totalCost = Number(existing.quantity) * Number(existing.avg_cost) + newCost
-          const newAvg    = totalCost / totalQty
+          const newAvg = totalCost / totalQty
           await supabase.from('holdings').update({
             quantity: totalQty,
             avg_cost: newAvg,
@@ -364,27 +366,23 @@ function TransactionModal({ accounts, transaction, onClose, onSaved }) {
             <input className="input" placeholder="例：元大台灣50" value={form.name} onChange={e=>set('name',e.target.value)} />
             {error && <p style={{ fontSize:11, color:'var(--accent-amber)', marginTop:4 }}>{error}</p>}
           </div>
-          {/* 股數 + 成交價 */}
+          {/* 股數 + 總成本 */}
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
             <div>
               <p className="label" style={{ marginBottom:6 }}>股數 <span style={{ color:'var(--accent-blue)' }}>*</span></p>
-              <input className="input" type="number" placeholder="0" value={form.quantity} onChange={e=>set('quantity',e.target.value)} />
+              <input className="input" type="number" placeholder="0" step="0.00001" value={form.quantity} onChange={e=>set('quantity',e.target.value)} />
             </div>
             <div>
-              <p className="label" style={{ marginBottom:6 }}>成交價 <span style={{ color:'var(--accent-blue)' }}>*</span></p>
-              <input className="input" type="number" placeholder="0" value={form.price} onChange={e=>set('price',e.target.value)} />
+              <p className="label" style={{ marginBottom:6 }}>總成本 <span style={{ color:'var(--accent-blue)' }}>*</span></p>
+              <input className="input" type="number" placeholder="0" value={form.total_cost} onChange={e=>set('total_cost',e.target.value)} />
             </div>
           </div>
-          {/* 手續費 + 稅 */}
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
-            <div>
-              <p className="label" style={{ marginBottom:6 }}>手續費</p>
-              <input className="input" type="number" placeholder="0" value={form.fee} onChange={e=>set('fee',e.target.value)} />
-            </div>
-            <div>
-              <p className="label" style={{ marginBottom:6 }}>稅</p>
-              <input className="input" type="number" placeholder="0" value={form.tax} onChange={e=>set('tax',e.target.value)} />
-            </div>
+          {/* 單位價格（自動計算） */}
+          <div style={{ background:'var(--bg-input)', borderRadius:'var(--radius-md)', padding:'10px 14px', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+            <span style={{ fontSize:13, color:'var(--text-secondary)' }}>單位價格（自動計算）</span>
+            <span className="text-mono" style={{ fontSize:13, fontWeight:600, color:unitPrice?'var(--text-primary)':'var(--text-muted)' }}>
+              {unitPrice ? formatNTD(unitPrice.toFixed(4)) : '—'}
+            </span>
           </div>
           {/* 日期 */}
           <div>
@@ -396,13 +394,6 @@ function TransactionModal({ accounts, transaction, onClose, onSaved }) {
             <p className="label" style={{ marginBottom:6 }}>備註（選填）</p>
             <input className="input" placeholder="交易原因" value={form.note} onChange={e=>set('note',e.target.value)} />
           </div>
-          {/* 總金額 */}
-          {total>0 && (
-            <div style={{ background:'var(--bg-input)', borderRadius:'var(--radius-md)', padding:'10px 14px', display:'flex', justifyContent:'space-between' }}>
-              <span style={{ fontSize:13, color:'var(--text-secondary)' }}>總金額</span>
-              <span className="text-mono" style={{ fontSize:13, fontWeight:500 }}>NT$ {formatNTD(total)}</span>
-            </div>
-          )}
           {/* 買入時顯示提示 */}
           {!isEdit && form.type==='buy' && (
             <p style={{ fontSize:11, color:'var(--text-muted)', textAlign:'center' }}>
@@ -410,7 +401,7 @@ function TransactionModal({ accounts, transaction, onClose, onSaved }) {
             </p>
           )}
           <button className="btn btn-primary" style={{ width:'100%', marginTop:4 }}
-            onClick={save} disabled={saving||!form.symbol||!form.quantity||!form.price}>
+            onClick={save} disabled={saving||!form.symbol||!form.quantity||!form.total_cost}>
             {saving?'儲存中...':isEdit?'儲存變更':'新增交易'}
           </button>
         </div>
