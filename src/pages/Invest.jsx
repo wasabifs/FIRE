@@ -1152,7 +1152,7 @@ export default function Invest() {
   }
 
   return (
-    <div className="page fade-in" style={{ paddingBottom:'calc(72px + env(safe-area-inset-bottom, 0px))' }}>
+    <div className="page fade-in">
       <PageHeader
         title="投資"
         action={
