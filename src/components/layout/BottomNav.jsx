@@ -23,11 +23,13 @@ export default function BottomNav() {
       WebkitBackdropFilter: 'blur(20px)',
       borderTop: '1px solid var(--border)',
       zIndex: 100,
+      /* 讓 nav 自己包含 safe area，總高度 = 64px + safe-area-inset-bottom */
+      paddingBottom: 'env(safe-area-inset-bottom, 0px)',
     }}>
       <div style={{
         display: 'flex',
         alignItems: 'center',
-        height: 'var(--nav-height)',
+        height: 'var(--nav-height)',  /* 64px，不含 safe area */
       }}>
         {tabs.map(({ to, icon: Icon, label }) => (
           <NavLink
@@ -50,8 +52,6 @@ export default function BottomNav() {
           </NavLink>
         ))}
       </div>
-      {/* Safe area spacer for iPhone home indicator */}
-      <div style={{ height: 'env(safe-area-inset-bottom, 0px)' }} />
     </nav>
   )
 }
