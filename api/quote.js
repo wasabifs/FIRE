@@ -1,10 +1,10 @@
 // api/quote.js — Vercel Serverless Function
-// 負責：現價 + 標的名稱查詢（台股名稱用 TWSE OpenAPI，server 端無 CORS 問題）
+// 用 Yahoo Finance v8 JSON endpoint，server 端無 CORS，不需要任何 npm 套件
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS')
-  res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=60')
+  res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate=30')
 
   if (req.method === 'OPTIONS') return res.status(200).end()
 
@@ -15,81 +15,52 @@ export default async function handler(req, res) {
   if (!symbolList.length) return res.status(400).json({ error: 'no symbols' })
 
   try {
-    const { default: YahooFinance } = await import('yahoo-finance2')
-    const yf = new YahooFinance({ suppressNotices: ['yahooSurvey'] })
+    // Yahoo Finance v8 quote endpoint — server 端可直接呼叫
+    const joined = symbolList.join(',')
+    const url = `https://query1.finance.yahoo.com/v8/finance/quote?symbols=${encodeURIComponent(joined)}&fields=regularMarketPrice,shortName,longName,currency`
 
-    // 取得 Yahoo Finance 報價
-    const results = await Promise.allSettled(
-      symbolList.map(sym => yf.quote(sym))
-    )
-
-    // 台股代號對照（從 symbol 判斷是否為台股）
-    const twNames = {}
-    const twSymbols = symbolList.filter(s => s.endsWith('.TW'))
-    if (twSymbols.length > 0) {
-      try {
-        // server 端直接打 TWSE，無 CORS 問題
-        const r = await fetch('https://openapi.twse.com.tw/v1/opendata/t187ap03_L', {
-          signal: AbortSignal.timeout(6000),
-          headers: { 'User-Agent': 'Mozilla/5.0' }
-        })
-        if (r.ok) {
-          const list = await r.json()
-          for (const sym of twSymbols) {
-            const code = sym.replace('.TW', '')
-            const found = list.find(item => (item['公司代號'] || '').trim() === code)
-            if (found) twNames[sym] = (found['公司簡稱'] || '').trim()
-          }
-        }
-      } catch (e) {
-        console.warn('TWSE server fetch error:', e.message)
-        // TWSE 失敗也沒關係，fallback 用 Yahoo 的名稱
+    const resp = await fetch(url, {
+      signal: AbortSignal.timeout(8000),
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+        'Accept': 'application/json',
+        'Accept-Language': 'zh-TW,zh;q=0.9,en;q=0.8',
       }
-
-      // TWSE 找不到的（ETF 等），試 TPEx
-      const missing = twSymbols.filter(s => !twNames[s])
-      if (missing.length > 0) {
-        try {
-          const r2 = await fetch('https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap03_O', {
-            signal: AbortSignal.timeout(6000),
-            headers: { 'User-Agent': 'Mozilla/5.0' }
-          })
-          if (r2.ok) {
-            const list2 = await r2.json()
-            for (const sym of missing) {
-              const code = sym.replace('.TW', '')
-              const found = list2.find(item => (item['公司代號'] || '').trim() === code)
-              if (found) twNames[sym] = (found['公司簡稱'] || '').trim()
-            }
-          }
-        } catch (e) {
-          console.warn('TPEx server fetch error:', e.message)
-        }
-      }
-    }
-
-    const quotes = results.map((r, i) => {
-      const sym = symbolList[i]
-      const twName = twNames[sym] || null
-
-      if (r.status === 'fulfilled' && r.value) {
-        const q = r.value
-        return {
-          symbol: sym,
-          price: q.regularMarketPrice ?? null,
-          // 台股優先用 TWSE 中文名，其次 Yahoo shortName
-          name: twName || q.shortName || q.longName || null,
-          currency: q.currency || null,
-        }
-      }
-
-      console.error(`quote error [${sym}]:`, r.reason?.message)
-      return { symbol: sym, price: null, name: twName, currency: null }
     })
 
-    return res.status(200).json({ quotes })
+    if (!resp.ok) {
+      // fallback: query2
+      const url2 = `https://query2.finance.yahoo.com/v8/finance/quote?symbols=${encodeURIComponent(joined)}`
+      const resp2 = await fetch(url2, {
+        signal: AbortSignal.timeout(8000),
+        headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'application/json' }
+      })
+      if (!resp2.ok) throw new Error(`Yahoo HTTP ${resp2.status}`)
+      const data2 = await resp2.json()
+      return res.status(200).json({ quotes: buildQuotes(symbolList, data2?.quoteResponse?.result || []) })
+    }
+
+    const data = await resp.json()
+    const results = data?.quoteResponse?.result || []
+    return res.status(200).json({ quotes: buildQuotes(symbolList, results) })
+
   } catch (err) {
-    console.error('handler error:', err.message)
+    console.error('quote handler error:', err.message)
     return res.status(500).json({ error: err.message })
   }
+}
+
+function buildQuotes(symbolList, results) {
+  return symbolList.map(sym => {
+    const r = results.find(q => q.symbol === sym)
+    if (r) {
+      return {
+        symbol: sym,
+        price: r.regularMarketPrice ?? null,
+        name: r.shortName || r.longName || null,
+        currency: r.currency || null,
+      }
+    }
+    return { symbol: sym, price: null, name: null, currency: null }
+  })
 }
