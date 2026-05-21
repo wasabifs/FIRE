@@ -38,7 +38,6 @@
 
 html {
   height: 100%;
-  /* prevent iOS bounce / overscroll */
   overscroll-behavior: none;
   -webkit-text-size-adjust: 100%;
 }
@@ -52,7 +51,6 @@ body {
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   overscroll-behavior: none;
-  /* prevent long-press callout on iOS */
   -webkit-touch-callout: none;
   touch-action: pan-y;
 }
@@ -61,11 +59,9 @@ body {
   height: 100%;
   display: flex;
   flex-direction: column;
-  /* Center on desktop, full width on mobile */
   max-width: 430px;
   margin: 0 auto;
   position: relative;
-  /* Respect safe area on notched phones */
   padding-top: var(--safe-top);
   background: var(--bg-base);
 }
@@ -75,8 +71,8 @@ body {
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
-  /* bottom padding = nav + safe area + breathing room */
-  padding: 16px 16px calc(var(--nav-height) + var(--safe-bottom) + 20px);
+  /* bottom padding = nav height + safe area (for home indicator) + breathing room */
+  padding: 16px 16px calc(var(--nav-height) + env(safe-area-inset-bottom, 0px) + 20px);
   -webkit-overflow-scrolling: touch;
 }
 
@@ -141,9 +137,9 @@ body {
 .input {
   width: 100%; background: var(--bg-input); border: 1px solid var(--border);
   border-radius: var(--radius-md); padding: 11px 14px;
-  font-family: 'DM Sans', sans-serif; font-size: 15px; color: var(--text-primary);
+  font-family: 'DM Sans', sans-serif; color: var(--text-primary);
   outline: none; transition: border-color 0.15s;
-  /* prevent iOS zoom on focus (font-size >= 16px triggers zoom) */
+  /* prevent iOS zoom on focus */
   font-size: 16px;
 }
 .input:focus { border-color: var(--accent-blue); }
