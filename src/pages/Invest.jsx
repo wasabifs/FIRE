@@ -998,7 +998,7 @@ function TransactionsTab({ accounts, onHoldingChanged }) {
 }
 
 // ── 損益分頁 ───────────────────────────────────────────────
-function PnlTab({ accounts }) {
+function PnlTab({ accounts, onHoldingChanged }) {
   const [records, setRecords] = useState([])
   const [loading, setLoading] = useState(true)
   const [showAdd, setShowAdd] = useState(false)
@@ -1107,7 +1107,7 @@ function PnlTab({ accounts }) {
             </div>
           )
       }
-      {showAdd && <AddPnlModal accounts={accounts} onClose={()=>setShowAdd(false)} onSaved={()=>{setShowAdd(false);load()}}/>}
+      {showAdd && <AddPnlModal accounts={accounts} onClose={()=>setShowAdd(false)} onSaved={()=>{setShowAdd(false);load();onHoldingChanged?.()}}/>}
     </div>
   )
 }
@@ -1176,7 +1176,7 @@ export default function Invest() {
           <>
             {tab==='持倉' && <HoldingsTab accounts={accounts} refreshTick={refreshTick} onRefreshDone={()=>setRefreshTick(t=>t+1)} usdRate={usdRate}/>}
             {tab==='交易' && <TransactionsTab accounts={accounts} onHoldingChanged={()=>setRefreshTick(t=>t+1)}/>}
-            {tab==='損益' && <PnlTab accounts={accounts}/>}
+            {tab==='損益' && <PnlTab accounts={accounts} onHoldingChanged={()=>setRefreshTick(t=>t+1)}/>}
           </>
         )
       }
