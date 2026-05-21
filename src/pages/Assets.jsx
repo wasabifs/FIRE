@@ -578,8 +578,19 @@ function DraggableAccountList({ accounts, rates, totalAllTWD, onReorder, onAddHo
                           </p>
                         )}
                       </div>
-                      {/* 編輯按鈕（非現金才顯示） */}
-                      {h.asset_type !== 'cash' && (
+                      {/* 現金：刪除按鈕；非現金：編輯按鈕 */}
+                      {h.asset_type === 'cash' ? (
+                        <button onClick={async () => {
+                          if (!confirm('確定刪除此現金記錄？')) return
+                          await supabase.from('holdings').delete().eq('id', h.id)
+                          onEdit('__refresh__')
+                        }} style={{
+                          flexShrink:0, width:26, height:26, borderRadius:6,
+                          background:'rgba(239,68,68,0.08)', border:'1px solid rgba(239,68,68,0.2)',
+                          display:'flex', alignItems:'center', justifyContent:'center',
+                          cursor:'pointer', color:'var(--loss)',
+                        }}><Trash2 size={11} /></button>
+                      ) : (
                         <button onClick={() => setEditHolding(h)} style={{
                           flexShrink:0, width:26, height:26, borderRadius:6,
                           background:'var(--bg-input)', border:'1px solid var(--border)',
