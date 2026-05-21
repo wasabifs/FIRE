@@ -18,13 +18,11 @@ export default function BottomNav() {
       transform: 'translateX(-50%)',
       width: '100%',
       maxWidth: 430,
-      background: 'rgba(8,12,20,0.95)',
+      background: 'rgba(8,12,20,0.97)',
       backdropFilter: 'blur(20px)',
       WebkitBackdropFilter: 'blur(20px)',
       borderTop: '1px solid var(--border)',
       zIndex: 100,
-      /* pad the icons area, then add safe area below */
-      paddingBottom: 'env(safe-area-inset-bottom, 0px)',
     }}>
       <div style={{
         display: 'flex',
@@ -52,6 +50,8 @@ export default function BottomNav() {
           </NavLink>
         ))}
       </div>
+      {/* Safe area spacer for iPhone home indicator */}
+      <div style={{ height: 'env(safe-area-inset-bottom, 0px)' }} />
     </nav>
   )
 }
