@@ -461,7 +461,7 @@ function AddPnlModal({ accounts, onClose, onSaved }) {
       const sellCost = Number(sell.total_cost) || 0
 
       // ── 寫入損益紀錄 ──
-      await supabase.from('pnl_records').insert({
+      const { error: pnlErr } = await supabase.from('pnl_records').insert({
         account_id: sell.account_id, type: 'sell_profit',
         symbol: sell.symbol.trim().toUpperCase() || null,
         market: sell.market || null,
@@ -470,29 +470,38 @@ function AddPnlModal({ accounts, onClose, onSaved }) {
         record_date: sell.record_date,
         note: `股數:${sellQty} 成本:${sellCost} 成交:${sell.sell_amount}`,
       })
+      if (pnlErr) { console.error('pnl insert error:', pnlErr); setSaving(false); return }
 
       // ── 自動扣減持倉 ──
       if (sellQty > 0 && sell.symbol.trim()) {
         const sym = sell.symbol.trim().toUpperCase()
-        const { data: existing } = await supabase.from('holdings')
-          .select('*')
+
+        // 先取得當前 user 確保 RLS context 正確
+        const { data: { user } } = await supabase.auth.getUser()
+
+        const { data: existing, error: qErr } = await supabase
+          .from('holdings')
+          .select('id, quantity, avg_cost')
           .eq('account_id', sell.account_id)
           .eq('symbol', sym)
           .maybeSingle()
 
+        console.log('holdings query:', { sym, account_id: sell.account_id, existing, qErr })
+
         if (existing) {
           const remainQty = Number(existing.quantity) - sellQty
           if (remainQty <= 0) {
-            // 全部賣出 → 刪除持倉
-            await supabase.from('holdings').delete().eq('id', existing.id)
+            const { error: delErr } = await supabase.from('holdings').delete().eq('id', existing.id)
+            console.log('delete result:', delErr)
           } else {
-            // 部分賣出 → 股數減少，成本按比例扣減，均價不變
-            const remainCost = Number(existing.avg_cost) * remainQty
-            await supabase.from('holdings').update({
+            const { error: updErr } = await supabase.from('holdings').update({
               quantity: remainQty,
-              avg_cost: remainCost / remainQty, // 均價不變，但留計算以防小數
+              avg_cost: Number(existing.avg_cost), // 均價不變
             }).eq('id', existing.id)
+            console.log('update result:', updErr, 'remainQty:', remainQty)
           }
+        } else {
+          console.warn('holding not found for', sym, 'in account', sell.account_id)
         }
       }
 
@@ -937,8 +946,8 @@ function TransactionsTab({ accounts, onHoldingChanged }) {
         </div>
       </div>
       <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:8 }}>
-        <input className="input" type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)} style={{ fontSize:13, padding:'8px 12px' }} />
-        <input className="input" type="date" value={dateTo}   onChange={e=>setDateTo(e.target.value)}   style={{ fontSize:13, padding:'8px 12px' }} />
+        <input className="input" type="text" value={dateFrom} onChange={e=>setDateFrom(e.target.value)} placeholder="從 YYYY-MM-DD" style={{ fontSize:13, padding:'8px 12px' }} />
+        <input className="input" type="text" value={dateTo}   onChange={e=>setDateTo(e.target.value)}   placeholder="至 YYYY-MM-DD" style={{ fontSize:13, padding:'8px 12px' }} />
       </div>
       <div style={{ display:'flex', gap:8, marginBottom:14 }}>
         <button className="btn btn-ghost" style={{ flex:1, fontSize:13, padding:'8px' }} onClick={load}>篩選</button>
@@ -1044,8 +1053,8 @@ function PnlTab({ accounts, onHoldingChanged }) {
         </div>
       </div>
       <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:8 }}>
-        <input className="input" type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)} style={{ fontSize:13, padding:'8px 12px' }} />
-        <input className="input" type="date" value={dateTo}   onChange={e=>setDateTo(e.target.value)}   style={{ fontSize:13, padding:'8px 12px' }} />
+        <input className="input" type="text" value={dateFrom} onChange={e=>setDateFrom(e.target.value)} placeholder="從 YYYY-MM-DD" style={{ fontSize:13, padding:'8px 12px' }} />
+        <input className="input" type="text" value={dateTo}   onChange={e=>setDateTo(e.target.value)}   placeholder="至 YYYY-MM-DD" style={{ fontSize:13, padding:'8px 12px' }} />
       </div>
       <div style={{ display:'flex', gap:8, marginBottom:12 }}>
         <button className="btn btn-ghost" style={{ flex:1, fontSize:13, padding:'8px' }} onClick={load}>篩選</button>
