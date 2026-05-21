@@ -18,14 +18,14 @@ export default function BottomNav() {
       transform: 'translateX(-50%)',
       width: '100%',
       maxWidth: 430,
+      zIndex: 100,
+      /* 背景色延伸到螢幕最底（包含 home indicator 區域） */
       background: 'rgba(8,12,20,0.97)',
       backdropFilter: 'blur(20px)',
       WebkitBackdropFilter: 'blur(20px)',
       borderTop: '1px solid var(--border)',
-      zIndex: 100,
-      /* 把 safe area 用 padding 推進 nav 內部，home indicator 區域有背景色覆蓋 */
-      paddingBottom: 'env(safe-area-inset-bottom, 0px)',
     }}>
+      {/* 圖示列固定 64px */}
       <div style={{ display: 'flex', alignItems: 'center', height: 64 }}>
         {tabs.map(({ to, icon: Icon, label }) => (
           <NavLink key={to} to={to} end={to === '/'} style={{ flex: 1, textDecoration: 'none' }}>
@@ -45,6 +45,11 @@ export default function BottomNav() {
           </NavLink>
         ))}
       </div>
+      {/* Safe area 填充：讓背景色蓋住 home indicator 區域 */}
+      <div style={{
+        height: 'env(safe-area-inset-bottom, 0px)',
+        background: 'rgba(8,12,20,0.97)',
+      }} />
     </nav>
   )
 }
