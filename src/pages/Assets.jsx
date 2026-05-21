@@ -16,6 +16,22 @@ const ACCOUNT_TYPES = [
 ]
 const CURRENCIES = ['TWD', 'USD', 'JPY']
 
+const ASSET_TYPES = [
+  { value: 'stock',  label: '股票' },
+  { value: 'etf',    label: 'ETF' },
+  { value: 'fund',   label: '基金' },
+  { value: 'crypto', label: '加密幣' },
+  { value: 'cash',   label: '現金' },
+]
+
+const MARKETS = [
+  { value: 'TW',     label: '台股' },
+  { value: 'US',     label: '美股' },
+  { value: 'JP',     label: '日股' },
+  { value: 'CRYPTO', label: '加密' },
+  { value: 'FUND',   label: '基金' },
+]
+
 function typeInfo(type) {
   return ACCOUNT_TYPES.find(t => t.value === type) || ACCOUNT_TYPES[0]
 }
@@ -27,7 +43,7 @@ function AccountModal({ account, onClose, onSaved }) {
     name: account?.name || '',
     type: account?.type || 'brokerage',
     currency: account?.currency || 'TWD',
-    current_value: '',   // 僅新增時用
+    current_value: '',
   })
   const [saving, setSaving] = useState(false)
   const [errMsg, setErrMsg] = useState('')
@@ -39,13 +55,11 @@ function AccountModal({ account, onClose, onSaved }) {
     const { data: { user } } = await supabase.auth.getUser()
 
     if (isEdit) {
-      // 編輯：更新帳戶名稱＆幣別
       const { error } = await supabase.from('accounts')
         .update({ name: form.name.trim(), currency: form.currency })
         .eq('id', account.id)
       if (error) { setErrMsg(error.message); setSaving(false); return }
 
-      // 若有填新現值，更新/新增帳戶現值 holding
       if (form.current_value && Number(form.current_value) >= 0) {
         const { data: existing } = await supabase.from('holdings')
           .select('id').eq('account_id', account.id).eq('symbol', 'CASH').single()
@@ -60,7 +74,6 @@ function AccountModal({ account, onClose, onSaved }) {
         }
       }
     } else {
-      // 新增
       const { data: acc, error: accErr } = await supabase.from('accounts').insert({
         user_id: user.id, name: form.name.trim(),
         type: form.type, currency: form.currency,
@@ -134,19 +147,21 @@ function AccountModal({ account, onClose, onSaved }) {
 
 // ── 新增持倉 Modal ──────────────────────────────────────────
 function AddAssetModal({ accountId, onClose, onSaved }) {
-  const [form, setForm] = useState({ name:'', symbol:'', market:'TW', asset_type:'stock', quantity:'', avg_cost:'', current_price:'' })
+  const [form, setForm] = useState({
+    name: '', symbol: '', market: 'TW', asset_type: 'stock',
+    quantity: '', avg_cost: '', current_price: '',
+  })
   const [saving, setSaving] = useState(false)
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
-  const ASSET_TYPES = [
-    { value:'stock', label:'股票' }, { value:'etf', label:'ETF' },
-    { value:'fund', label:'基金' }, { value:'crypto', label:'加密幣' },
-    { value:'cash', label:'現金' },
-  ]
-  const MARKETS = [
-    { value:'TW', label:'台股' }, { value:'US', label:'美股' },
-    { value:'JP', label:'日股' }, { value:'CRYPTO', label:'加密' }, { value:'FUND', label:'基金' },
-  ]
+  const isCash = form.asset_type === 'cash'
+
+  // 切換現金時自動調整 market
+  function handleAssetTypeChange(val) {
+    set('asset_type', val)
+    if (val === 'cash') set('market', 'CASH')
+    else if (form.market === 'CASH') set('market', 'TW')
+  }
 
   async function save() {
     if (!form.name.trim() || !form.quantity) return
@@ -155,16 +170,15 @@ function AddAssetModal({ accountId, onClose, onSaved }) {
       account_id: accountId,
       symbol: form.symbol.trim().toUpperCase() || form.name.trim(),
       name: form.name.trim(),
-      market: form.asset_type==='cash' ? 'CASH' : form.market,
+      market: isCash ? 'CASH' : form.market,
       asset_type: form.asset_type,
       quantity: Number(form.quantity),
-      avg_cost: Number(form.avg_cost)||0,
-      current_price: Number(form.current_price)||Number(form.avg_cost)||0,
+      avg_cost: Number(form.avg_cost) || 0,
+      current_price: Number(form.current_price) || Number(form.avg_cost) || 0,
     })
     setSaving(false); onSaved()
   }
 
-  const isCash = form.asset_type === 'cash'
   return (
     <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.75)', zIndex:200, display:'flex', alignItems:'center', justifyContent:'center', padding:'0 16px' }}
       onClick={e => e.target === e.currentTarget && onClose()}>
@@ -174,66 +188,73 @@ function AddAssetModal({ accountId, onClose, onSaved }) {
           <button className="btn btn-icon" onClick={onClose}><X size={16} /></button>
         </div>
         <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
+
+          {/* 資產類型 — 下拉選單 */}
           <div>
             <p className="label" style={{ marginBottom:6 }}>資產類型</p>
-            <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+            <select className="input" value={form.asset_type} onChange={e => handleAssetTypeChange(e.target.value)}>
               {ASSET_TYPES.map(({ value, label }) => (
-                <button key={value} onClick={() => set('asset_type', value)} style={{
-                  padding:'6px 12px', borderRadius:20, fontSize:13, cursor:'pointer',
-                  background: form.asset_type===value?'var(--accent-blue)':'var(--bg-input)',
-                  color: form.asset_type===value?'white':'var(--text-secondary)',
-                  border: form.asset_type===value?'1px solid var(--accent-blue)':'1px solid var(--border)',
-                }}>{label}</button>
+                <option key={value} value={value}>{label}</option>
               ))}
-            </div>
+            </select>
           </div>
+
+          {/* 市場 — 下拉選單（現金時隱藏） */}
           {!isCash && (
             <div>
               <p className="label" style={{ marginBottom:6 }}>市場</p>
-              <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+              <select className="input" value={form.market} onChange={e => set('market', e.target.value)}>
                 {MARKETS.map(({ value, label }) => (
-                  <button key={value} onClick={() => set('market', value)} style={{
-                    padding:'6px 12px', borderRadius:20, fontSize:13, cursor:'pointer',
-                    background: form.market===value?'rgba(59,130,246,0.15)':'var(--bg-input)',
-                    color: form.market===value?'var(--accent-blue)':'var(--text-secondary)',
-                    border: form.market===value?'1px solid var(--accent-blue)':'1px solid var(--border)',
-                  }}>{label}</button>
+                  <option key={value} value={value}>{label}</option>
                 ))}
-              </div>
+              </select>
             </div>
           )}
-          <div style={{ display:'grid', gridTemplateColumns: isCash?'1fr':'1fr 1fr', gap:10 }}>
+
+          {/* 名稱 + 代號 */}
+          <div style={{ display:'grid', gridTemplateColumns: isCash ? '1fr' : '1fr 1fr', gap:10 }}>
             <div>
-              <p className="label" style={{ marginBottom:6 }}>名稱</p>
-              <input className="input" placeholder={isCash?'例：台幣現金':'例：元大台灣50'} value={form.name} onChange={e => set('name', e.target.value)} />
+              <p className="label" style={{ marginBottom:6 }}>名稱 <span style={{ color:'var(--accent-blue)' }}>*</span></p>
+              <input className="input" placeholder={isCash ? '例：台幣現金' : '例：元大台灣50'}
+                value={form.name} onChange={e => set('name', e.target.value)} autoFocus />
             </div>
             {!isCash && (
               <div>
                 <p className="label" style={{ marginBottom:6 }}>代號</p>
-                <input className="input" placeholder="例：0050" value={form.symbol} onChange={e => set('symbol', e.target.value)} />
+                <input className="input" placeholder="例：0050"
+                  value={form.symbol} onChange={e => set('symbol', e.target.value)} />
               </div>
             )}
           </div>
-          <div style={{ display:'grid', gridTemplateColumns: isCash?'1fr':'1fr 1fr', gap:10 }}>
+
+          {/* 數量 + 均價 */}
+          <div style={{ display:'grid', gridTemplateColumns: isCash ? '1fr' : '1fr 1fr', gap:10 }}>
             <div>
-              <p className="label" style={{ marginBottom:6 }}>{isCash?'金額':'數量（股/單位）'}</p>
-              <input className="input" type="number" placeholder="0" value={form.quantity} onChange={e => set('quantity', e.target.value)} />
+              <p className="label" style={{ marginBottom:6 }}>{isCash ? '金額' : '數量（股/單位）'} <span style={{ color:'var(--accent-blue)' }}>*</span></p>
+              <input className="input" type="number" placeholder="0"
+                value={form.quantity} onChange={e => set('quantity', e.target.value)} />
             </div>
             {!isCash && (
               <div>
                 <p className="label" style={{ marginBottom:6 }}>均價</p>
-                <input className="input" type="number" placeholder="0" value={form.avg_cost} onChange={e => set('avg_cost', e.target.value)} />
+                <input className="input" type="number" placeholder="0"
+                  value={form.avg_cost} onChange={e => set('avg_cost', e.target.value)} />
               </div>
             )}
           </div>
+
+          {/* 現價（選填，非現金才顯示） */}
           {!isCash && (
             <div>
               <p className="label" style={{ marginBottom:6 }}>現價（選填）</p>
-              <input className="input" type="number" placeholder={form.avg_cost||'0'} value={form.current_price} onChange={e => set('current_price', e.target.value)} />
+              <input className="input" type="number" placeholder={form.avg_cost || '0'}
+                value={form.current_price} onChange={e => set('current_price', e.target.value)} />
+              <p style={{ fontSize:11, color:'var(--text-muted)', marginTop:4 }}>留空則自動沿用均價，之後可由投資頁更新</p>
             </div>
           )}
+
           <button className="btn btn-primary" style={{ width:'100%', marginTop:4 }}
-            onClick={save} disabled={saving||!form.name.trim()||!form.quantity}>
+            onClick={save} disabled={saving || !form.name.trim() || !form.quantity}>
             {saving ? '儲存中...' : '新增持倉'}
           </button>
         </div>
@@ -260,7 +281,6 @@ function RebalancePanel({ grouped, accountTotalTWD, totalTWD }) {
 
   return (
     <div style={{ marginTop:8, background:'var(--bg-surface)', borderRadius:'var(--radius-lg)', border:'1px solid var(--border)', overflow:'hidden' }}>
-      {/* Header */}
       <div style={{ padding:'12px 16px', borderBottom:'1px solid var(--border)', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
         <span style={{ fontSize:12, color:'var(--text-muted)' }}>設定目標佔比（總計 {totalTarget}%）</span>
         <span style={{ fontSize:12, color: Math.abs(totalTarget - 100) < 1 ? 'var(--profit)' : 'var(--accent-amber)' }}>
@@ -283,7 +303,6 @@ function RebalancePanel({ grouped, accountTotalTWD, totalTWD }) {
                 <Icon size={14} color={color} />
               </div>
               <span style={{ fontSize:13, fontWeight:500, flex:1 }}>{label}</span>
-              {/* Target input */}
               <div style={{ display:'flex', alignItems:'center', gap:4, flexShrink:0 }}>
                 <span style={{ fontSize:11, color:'var(--text-muted)' }}>目標</span>
                 <input
@@ -301,10 +320,8 @@ function RebalancePanel({ grouped, accountTotalTWD, totalTWD }) {
               </div>
             </div>
 
-            {/* Progress bar */}
             <div style={{ display:'flex', alignItems:'center', gap:8 }}>
               <div style={{ flex:1, height:6, background:'var(--bg-input)', borderRadius:3, overflow:'hidden', position:'relative' }}>
-                {/* Target marker */}
                 {targetPct > 0 && (
                   <div style={{
                     position:'absolute', top:0, bottom:0,
@@ -313,7 +330,6 @@ function RebalancePanel({ grouped, accountTotalTWD, totalTWD }) {
                     transform:'translateX(-50%)', zIndex:2,
                   }} />
                 )}
-                {/* Current bar */}
                 <div style={{
                   height:'100%', width:`${Math.min(currentPct, 100)}%`,
                   background: color, borderRadius:3, transition:'width 0.4s ease',
@@ -330,7 +346,6 @@ function RebalancePanel({ grouped, accountTotalTWD, totalTWD }) {
                 )}
               </div>
             </div>
-            {/* Diff amount hint */}
             {targetPct > 0 && diffAbs > 1 && (
               <p style={{ fontSize:11, color: diffColor, marginTop:4, textAlign:'right' }}>
                 {diff > 0
@@ -504,12 +519,10 @@ export default function Assets() {
     const accs = data || []
     setAccounts(accs)
 
-    // 預設展開所有類型
     const types = [...new Set(accs.map(a => a.type))]
     setExpandedTypes(Object.fromEntries(types.map(t => [t, true])))
     setLoading(false)
 
-    // 非同步抓匯率
     const currencies = [...new Set(accs.map(a => a.currency))]
     if (currencies.some(c => c !== 'TWD')) {
       setRateLoading(true)
@@ -641,12 +654,10 @@ export default function Assets() {
         </div>
       )}
 
-      {/* Rebalance panel - shown when toggled from header */}
       {showRebalance && grouped.length > 0 && (
         <RebalancePanel grouped={grouped} accountTotalTWD={accountTotalTWD} totalTWD={netAssets + totalDebt} />
       )}
 
-      {/* spin animation */}
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
 
       {(showAddAccount || editAccount) && (
