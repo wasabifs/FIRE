@@ -1,5 +1,7 @@
 // api/quote.js — Vercel Serverless Function
-// 用 Yahoo Finance v8 JSON endpoint，server 端無 CORS，不需要任何 npm 套件
+// 使用 Finnhub API（免費、穩定、不封鎖雲端 IP）
+
+const FINNHUB_KEY = 'd877iipr01ql0hskkbqgd877iipr01ql0hskkbr0'
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*')
@@ -14,53 +16,54 @@ export default async function handler(req, res) {
   const symbolList = symbols.split(',').map(s => s.trim()).filter(Boolean)
   if (!symbolList.length) return res.status(400).json({ error: 'no symbols' })
 
-  try {
-    // Yahoo Finance v8 quote endpoint — server 端可直接呼叫
-    const joined = symbolList.join(',')
-    const url = `https://query1.finance.yahoo.com/v8/finance/quote?symbols=${encodeURIComponent(joined)}&fields=regularMarketPrice,shortName,longName,currency`
+  // Finnhub 台股格式：0050.TW → TWSE:0050
+  // 美股：AAPL → AAPL
+  // 日股：7203.T → TYO:7203
+  function toFinnhubSymbol(sym) {
+    if (sym.endsWith('.TW')) return `TWSE:${sym.replace('.TW', '')}`
+    if (sym.endsWith('.T'))  return `TYO:${sym.replace('.T', '')}`
+    return sym
+  }
 
-    const resp = await fetch(url, {
-      signal: AbortSignal.timeout(8000),
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
-        'Accept': 'application/json',
-        'Accept-Language': 'zh-TW,zh;q=0.9,en;q=0.8',
-      }
+  try {
+    const results = await Promise.allSettled(
+      symbolList.map(async (sym) => {
+        const fSym = toFinnhubSymbol(sym)
+
+        // 同時取報價 + 公司名稱
+        const [quoteRes, profileRes] = await Promise.allSettled([
+          fetch(`https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(fSym)}&token=${FINNHUB_KEY}`,
+            { signal: AbortSignal.timeout(6000) }),
+          fetch(`https://finnhub.io/api/v1/stock/profile2?symbol=${encodeURIComponent(fSym)}&token=${FINNHUB_KEY}`,
+            { signal: AbortSignal.timeout(6000) }),
+        ])
+
+        let price = null
+        let name = null
+
+        if (quoteRes.status === 'fulfilled' && quoteRes.value.ok) {
+          const q = await quoteRes.value.json()
+          price = q.c || null  // c = current price
+        }
+
+        if (profileRes.status === 'fulfilled' && profileRes.value.ok) {
+          const p = await profileRes.value.json()
+          name = p.name || null
+        }
+
+        return { symbol: sym, price, name, currency: sym.endsWith('.TW') ? 'TWD' : sym.endsWith('.T') ? 'JPY' : 'USD' }
+      })
+    )
+
+    const quotes = results.map((r, i) => {
+      if (r.status === 'fulfilled') return r.value
+      console.error(`finnhub error [${symbolList[i]}]:`, r.reason?.message)
+      return { symbol: symbolList[i], price: null, name: null, currency: null }
     })
 
-    if (!resp.ok) {
-      // fallback: query2
-      const url2 = `https://query2.finance.yahoo.com/v8/finance/quote?symbols=${encodeURIComponent(joined)}`
-      const resp2 = await fetch(url2, {
-        signal: AbortSignal.timeout(8000),
-        headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'application/json' }
-      })
-      if (!resp2.ok) throw new Error(`Yahoo HTTP ${resp2.status}`)
-      const data2 = await resp2.json()
-      return res.status(200).json({ quotes: buildQuotes(symbolList, data2?.quoteResponse?.result || []) })
-    }
-
-    const data = await resp.json()
-    const results = data?.quoteResponse?.result || []
-    return res.status(200).json({ quotes: buildQuotes(symbolList, results) })
-
+    return res.status(200).json({ quotes })
   } catch (err) {
-    console.error('quote handler error:', err.message)
+    console.error('handler error:', err.message)
     return res.status(500).json({ error: err.message })
   }
-}
-
-function buildQuotes(symbolList, results) {
-  return symbolList.map(sym => {
-    const r = results.find(q => q.symbol === sym)
-    if (r) {
-      return {
-        symbol: sym,
-        price: r.regularMarketPrice ?? null,
-        name: r.shortName || r.longName || null,
-        currency: r.currency || null,
-      }
-    }
-    return { symbol: sym, price: null, name: null, currency: null }
-  })
 }
