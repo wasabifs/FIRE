@@ -1,67 +1,43 @@
 /**
- * 即時報價 API
- * 台股: Yahoo Finance (TW) — 免費無需 key
- * 美股: Yahoo Finance (US)
- * 日股: Yahoo Finance (.T)
- *
- * 注意：Yahoo Finance 直接在瀏覽器 fetch 會遇到 CORS 問題。
- * 使用 allorigins 或 corsproxy.io 作為代理，或改用支援 CORS 的免費 API。
+ * 即時報價 — 透過 Vercel Serverless Function (/api/quote) 查詢
+ * 避免瀏覽器直接呼叫 Yahoo Finance 的 CORS 問題
  */
 
 const CACHE = {}
-const CACHE_TTL = 60 * 1000 // 1分鐘快取
+const CACHE_TTL = 60 * 1000 // 1 分鐘快取
 
 function cacheKey(symbol, market) { return `${market}:${symbol}` }
 
 function yahooSymbol(symbol, market) {
   if (market === 'TW') return `${symbol}.TW`
   if (market === 'JP') return `${symbol}.T`
-  return symbol // US, CRYPTO 等
+  return symbol // US、CRYPTO 等
 }
 
 /**
- * 透過 Yahoo Finance query2（支援部分 CORS）取得多檔報價
+ * 呼叫 /api/quote serverless function
+ * symbols: ["0050.TW", "AAPL", "7203.T"]
+ * 回傳 [{ symbol, price, name, currency, changePercent }]
  */
-async function fetchYahooQuoteDirect(yahooSymbols) {
-  const joined = yahooSymbols.join(',')
-  // query2 比 query1 較少限制
-  const url = `https://query2.finance.yahoo.com/v8/finance/quote?symbols=${joined}&fields=regularMarketPrice,shortName,longName,currency`
+async function fetchFromAPI(yahooSymbols) {
   try {
-    const res = await fetch(url, {
-      signal: AbortSignal.timeout(8000),
-      headers: { 'Accept': 'application/json' },
-    })
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    const res = await fetch(
+      `/api/quote?symbols=${encodeURIComponent(yahooSymbols.join(','))}`,
+      { signal: AbortSignal.timeout(10000) }
+    )
+    if (!res.ok) throw new Error(`API error ${res.status}`)
     const data = await res.json()
-    return data?.quoteResponse?.result || []
+    return data.quotes || []
   } catch (e) {
-    console.warn('Yahoo Finance query2 failed:', e)
-    return []
-  }
-}
-
-/**
- * 備用：透過 allorigins proxy 繞過 CORS
- */
-async function fetchYahooQuoteViaProxy(yahooSymbols) {
-  const joined = yahooSymbols.join(',')
-  const targetUrl = `https://query1.finance.yahoo.com/v8/finance/quote?symbols=${encodeURIComponent(joined)}&fields=regularMarketPrice,shortName,longName`
-  const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`
-  try {
-    const res = await fetch(proxyUrl, { signal: AbortSignal.timeout(10000) })
-    const wrapper = await res.json()
-    const data = JSON.parse(wrapper.contents)
-    return data?.quoteResponse?.result || []
-  } catch (e) {
-    console.warn('Yahoo Finance via proxy failed:', e)
+    console.warn('fetchFromAPI failed:', e)
     return []
   }
 }
 
 /**
  * 批次取得多檔報價
- * holdings: [{ symbol, market }]
- * 回傳 Map<"market:symbol", { price, name }>
+ * holdings: [{ symbol, market, asset_type }]
+ * 回傳 Map<"market:symbol", price>
  */
 export async function fetchQuotes(holdings) {
   const now = Date.now()
@@ -80,28 +56,20 @@ export async function fetchQuotes(holdings) {
 
   if (toFetch.length === 0) return prices
 
-  // 只處理有報價 API 支援的市場
+  // 只處理 Yahoo Finance 支援的市場
   const supported = toFetch.filter(h => ['TW', 'US', 'JP'].includes(h.market))
   if (supported.length === 0) return prices
 
   const yahooSymbols = supported.map(h => yahooSymbol(h.symbol, h.market))
-
-  // 先嘗試直接 fetch
-  let results = await fetchYahooQuoteDirect(yahooSymbols)
-
-  // 若失敗，嘗試 proxy
-  if (results.length === 0) {
-    results = await fetchYahooQuoteViaProxy(yahooSymbols)
-  }
+  const results = await fetchFromAPI(yahooSymbols)
 
   for (const r of results) {
-    const price = r.regularMarketPrice || r.postMarketPrice
-    if (!price) continue
+    if (r.price == null) continue
     const h = supported.find(h => yahooSymbol(h.symbol, h.market) === r.symbol)
     if (h) {
       const key = cacheKey(h.symbol, h.market)
-      CACHE[key] = { price, ts: now }
-      prices[key] = price
+      CACHE[key] = { price: r.price, ts: now }
+      prices[key] = r.price
     }
   }
 
@@ -109,25 +77,21 @@ export async function fetchQuotes(holdings) {
 }
 
 /**
- * 查詢單一標的名稱（填入代號後自動帶入）
+ * 查詢單一標的的名稱與現價（新增持倉時自動帶入）
  * 回傳 { name, price, currency } 或 null
  */
 export async function lookupSymbol(symbol, market) {
   if (!symbol || !market) return null
+  if (!['TW', 'US', 'JP'].includes(market)) return null
+
   const ySym = yahooSymbol(symbol.trim().toUpperCase(), market)
+  const results = await fetchFromAPI([ySym])
 
-  // 嘗試直接 fetch
-  let results = await fetchYahooQuoteDirect([ySym])
-  if (results.length === 0) {
-    results = await fetchYahooQuoteViaProxy([ySym])
-  }
-
-  if (results.length > 0) {
-    const r = results[0]
+  if (results.length > 0 && results[0].name) {
     return {
-      name: r.shortName || r.longName || symbol.toUpperCase(),
-      price: r.regularMarketPrice || 0,
-      currency: r.currency || 'TWD',
+      name: results[0].name,
+      price: results[0].price ?? 0,
+      currency: results[0].currency ?? 'TWD',
     }
   }
   return null
