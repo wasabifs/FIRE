@@ -13,8 +13,7 @@ export default function BottomNav() {
   return (
     <nav style={{
       position: 'fixed',
-      /* 關鍵：bottom 等於 safe-area-inset-bottom，讓 nav 整體在 home indicator 上方 */
-      bottom: 'env(safe-area-inset-bottom, 0px)',
+      bottom: 0,
       left: '50%',
       transform: 'translateX(-50%)',
       width: '100%',
@@ -24,6 +23,8 @@ export default function BottomNav() {
       WebkitBackdropFilter: 'blur(20px)',
       borderTop: '1px solid var(--border)',
       zIndex: 100,
+      /* 把 safe area 用 padding 推進 nav 內部，home indicator 區域有背景色覆蓋 */
+      paddingBottom: 'env(safe-area-inset-bottom, 0px)',
     }}>
       <div style={{ display: 'flex', alignItems: 'center', height: 64 }}>
         {tabs.map(({ to, icon: Icon, label }) => (
