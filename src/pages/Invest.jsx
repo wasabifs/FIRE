@@ -3,6 +3,7 @@ import { Plus, RefreshCw, X, ArrowUpRight, ArrowDownRight, DollarSign, Edit2, Tr
 import { supabase } from '../lib/supabase'
 import { formatNTD, formatPct, formatPctColor, formatDate } from '../lib/format'
 import { fetchQuotes, lookupSymbol } from '../lib/quote'
+import { getRates } from '../lib/fx'
 import PageHeader from '../components/layout/PageHeader'
 
 const TABS = ['持倉', '交易', '損益']
@@ -419,90 +420,201 @@ function TransactionModal({ accounts, transaction, onClose, onSaved }) {
   )
 }
 
-// ── 新增損益 Modal ──────────────────────────────────────────
+// ── 新增損益 Modal（賣出 / 股利 兩分頁）─────────────────────
 function AddPnlModal({ accounts, onClose, onSaved }) {
-  const [form, setForm] = useState({
-    account_id:accounts[0]?.id||'', type:'dividend', symbol:'', market:'TW',
-    amount:'', tax:'', record_date:new Date().toISOString().slice(0,10), note:'',
-  })
+  const [type, setType] = useState('sell_profit') // 'sell_profit' | 'dividend'
   const [saving, setSaving] = useState(false)
-  const set = (k,v) => setForm(f=>({...f,[k]:v}))
-  const PNL_TYPES = [
-    { value:'dividend', label:'股利/配息' }, { value:'sell_profit', label:'賣出損益' },
-    { value:'interest', label:'利息' }, { value:'other', label:'其他' },
-  ]
+
+  // ── 賣出表單 ──
+  const [sell, setSell] = useState({
+    record_date: new Date().toISOString().slice(0,10),
+    account_id: accounts[0]?.id || '',
+    market: 'TW', symbol: '', name: '',
+    quantity: '', total_cost: '', sell_amount: '',
+  })
+  const setSellF = (k, v) => setSell(f => ({ ...f, [k]: v }))
+
+  const { looking: sellLooking, error: sellError, trigger: sellTrigger } =
+    useSymbolLookup(sell.symbol, sell.market, r => setSellF('name', r.name))
+
+  const sellProfit = (sell.sell_amount !== '' && sell.total_cost !== '')
+    ? Number(sell.sell_amount) - Number(sell.total_cost) : null
+  const sellPct = (sellProfit !== null && Number(sell.total_cost) > 0)
+    ? (sellProfit / Number(sell.total_cost) * 100) : null
+
+  // ── 股利表單 ──
+  const [div, setDiv] = useState({
+    record_date: new Date().toISOString().slice(0,10),
+    account_id: accounts[0]?.id || '',
+    market: 'TW', symbol: '', name: '', amount: '',
+  })
+  const setDivF = (k, v) => setDiv(f => ({ ...f, [k]: v }))
+
+  const { looking: divLooking, error: divError, trigger: divTrigger } =
+    useSymbolLookup(div.symbol, div.market, r => setDivF('name', r.name))
+
   async function save() {
-    if (!form.amount) return
     setSaving(true)
-    await supabase.from('pnl_records').insert({
-      account_id:form.account_id, type:form.type,
-      symbol:form.symbol.trim().toUpperCase()||null, market:form.market||null,
-      amount:Number(form.amount), tax:Number(form.tax)||0,
-      record_date:form.record_date, note:form.note.trim()||null,
-    })
+    if (type === 'sell_profit') {
+      if (!sell.sell_amount) { setSaving(false); return }
+      await supabase.from('pnl_records').insert({
+        account_id: sell.account_id, type: 'sell_profit',
+        symbol: sell.symbol.trim().toUpperCase() || null,
+        market: sell.market || null,
+        amount: sellProfit ?? 0,
+        tax: 0,
+        record_date: sell.record_date,
+        note: sell.quantity ? `股數:${sell.quantity} 成本:${sell.total_cost} 成交:${sell.sell_amount}` : null,
+      })
+    } else {
+      if (!div.amount) { setSaving(false); return }
+      await supabase.from('pnl_records').insert({
+        account_id: div.account_id, type: 'dividend',
+        symbol: div.symbol.trim().toUpperCase() || null,
+        market: div.market || null,
+        amount: Number(div.amount), tax: 0,
+        record_date: div.record_date, note: null,
+      })
+    }
     setSaving(false); onSaved()
   }
+
+  const canSave = type === 'sell_profit' ? !!sell.sell_amount : !!div.amount
+
   return (
     <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.75)', zIndex:200, display:'flex', alignItems:'center', justifyContent:'center', padding:'0 16px' }}
-      onClick={e=>e.target===e.currentTarget&&onClose()}>
-      <div style={{ width:'100%', maxWidth:400, background:'var(--bg-surface)', borderRadius:'var(--radius-xl)', padding:'24px 20px 28px', border:'1px solid var(--border)', maxHeight:'90vh', overflowY:'auto' }}>
-        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:20 }}>
+      onClick={e => e.target === e.currentTarget && onClose()}>
+      <div style={{ width:'100%', maxWidth:400, background:'var(--bg-surface)', borderRadius:'var(--radius-xl)', padding:'24px 20px 28px', border:'1px solid var(--border)', maxHeight:'92vh', overflowY:'auto' }}>
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:16 }}>
           <h2 style={{ fontSize:18, fontWeight:600 }}>新增損益紀錄</h2>
           <button className="btn btn-icon" onClick={onClose}><X size={16}/></button>
         </div>
+
+        {/* 類型切換 — 買入/賣出 風格 */}
+        <div style={{ display:'flex', background:'var(--bg-input)', borderRadius:10, padding:3, marginBottom:16 }}>
+          {[['sell_profit','賣出'],['dividend','股利']].map(([v,l]) => (
+            <button key={v} onClick={() => setType(v)} style={{
+              flex:1, padding:'8px 0', borderRadius:8, border:'none', cursor:'pointer', fontSize:14, fontWeight:500,
+              background: type===v ? (v==='sell_profit' ? 'var(--profit)' : 'rgba(59,130,246,0.8)') : 'transparent',
+              color: type===v ? 'white' : 'var(--text-muted)', transition:'all 0.15s',
+            }}>{l}</button>
+          ))}
+        </div>
+
         <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
-          <div>
-            <p className="label" style={{ marginBottom:6 }}>類型</p>
-            <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
-              {PNL_TYPES.map(({value,label})=>(
-                <button key={value} onClick={()=>set('type',value)} style={{
-                  padding:'6px 12px', borderRadius:20, fontSize:13, cursor:'pointer',
-                  background:form.type===value?'rgba(59,130,246,0.15)':'var(--bg-input)',
-                  color:form.type===value?'var(--accent-blue)':'var(--text-secondary)',
-                  border:form.type===value?'1px solid var(--accent-blue)':'1px solid var(--border)',
-                }}>{label}</button>
-              ))}
-            </div>
-          </div>
-          <div>
-            <p className="label" style={{ marginBottom:6 }}>帳戶</p>
-            <select className="input" value={form.account_id} onChange={e=>set('account_id',e.target.value)}>
-              {accounts.map(a=><option key={a.id} value={a.id}>{a.name}</option>)}
-            </select>
-          </div>
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
-            <div>
-              <p className="label" style={{ marginBottom:6 }}>代號（選填）</p>
-              <input className="input" placeholder="例：0050" value={form.symbol} onChange={e=>set('symbol',e.target.value)} />
-            </div>
-            <div>
-              <p className="label" style={{ marginBottom:6 }}>市場</p>
-              <select className="input" value={form.market} onChange={e=>set('market',e.target.value)}>
-                {['TW','US','JP','CRYPTO','FUND'].map(m=><option key={m} value={m}>{MARKET_LABELS[m]}</option>)}
-              </select>
-            </div>
-          </div>
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
-            <div>
-              <p className="label" style={{ marginBottom:6 }}>金額（TWD）</p>
-              <input className="input" type="number" placeholder="0" value={form.amount} onChange={e=>set('amount',e.target.value)} />
-            </div>
-            <div>
-              <p className="label" style={{ marginBottom:6 }}>稅（選填）</p>
-              <input className="input" type="number" placeholder="0" value={form.tax} onChange={e=>set('tax',e.target.value)} />
-            </div>
-          </div>
-          <div>
-            <p className="label" style={{ marginBottom:6 }}>日期</p>
-            <input className="input" type="date" value={form.record_date} onChange={e=>set('record_date',e.target.value)} />
-          </div>
-          <div>
-            <p className="label" style={{ marginBottom:6 }}>備註（選填）</p>
-            <input className="input" value={form.note} onChange={e=>set('note',e.target.value)} />
-          </div>
+          {type === 'sell_profit' ? (
+            <>
+              <div>
+                <p className="label" style={{ marginBottom:6 }}>日期</p>
+                <input className="input" type="date" value={sell.record_date} onChange={e => setSellF('record_date', e.target.value)} />
+              </div>
+              <div>
+                <p className="label" style={{ marginBottom:6 }}>帳戶</p>
+                <select className="input" value={sell.account_id} onChange={e => setSellF('account_id', e.target.value)}>
+                  {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                </select>
+              </div>
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+                <div>
+                  <p className="label" style={{ marginBottom:6 }}>市場</p>
+                  <select className="input" value={sell.market} onChange={e => { setSellF('market', e.target.value); sellTrigger(sell.symbol, e.target.value) }}>
+                    {['TW','US','JP','CRYPTO','FUND'].map(m => <option key={m} value={m}>{MARKET_LABELS[m]}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <p className="label" style={{ marginBottom:6 }}>代號</p>
+                  <div style={{ position:'relative' }}>
+                    <input className="input" placeholder="例：0050" value={sell.symbol}
+                      onChange={e => { setSellF('symbol', e.target.value); sellTrigger(e.target.value, sell.market) }}
+                      style={{ paddingRight: sellLooking ? 36 : 14 }} />
+                    {sellLooking && <div style={{ position:'absolute', right:10, top:'50%', transform:'translateY(-50%)' }}>
+                      <RefreshCw size={14} color="var(--accent-blue)" style={{ animation:'spin 1s linear infinite' }}/>
+                    </div>}
+                  </div>
+                </div>
+              </div>
+              <div>
+                <p className="label" style={{ marginBottom:6 }}>
+                  名稱
+                  {sellLooking && <span style={{ color:'var(--accent-blue)', marginLeft:6, fontSize:10 }}>查詢中...</span>}
+                  {!sellLooking && sell.name && <span style={{ color:'var(--profit)', marginLeft:6, fontSize:10 }}>✓ 已自動帶入</span>}
+                </p>
+                <input className="input" placeholder="例：元大台灣50" value={sell.name} onChange={e => setSellF('name', e.target.value)} />
+                {sellError && <p style={{ fontSize:11, color:'var(--accent-amber)', marginTop:4 }}>{sellError}</p>}
+              </div>
+              <div>
+                <p className="label" style={{ marginBottom:6 }}>股數（選填）</p>
+                <input className="input" type="number" placeholder="0" step="0.00001" value={sell.quantity} onChange={e => setSellF('quantity', e.target.value)} />
+              </div>
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+                <div>
+                  <p className="label" style={{ marginBottom:6 }}>總成本</p>
+                  <input className="input" type="number" placeholder="0" value={sell.total_cost} onChange={e => setSellF('total_cost', e.target.value)} />
+                </div>
+                <div>
+                  <p className="label" style={{ marginBottom:6 }}>成交價 <span style={{ color:'var(--accent-blue)' }}>*</span></p>
+                  <input className="input" type="number" placeholder="0" value={sell.sell_amount} onChange={e => setSellF('sell_amount', e.target.value)} />
+                </div>
+              </div>
+              {/* 獲利 / 獲利率自動計算 */}
+              <div style={{ background:'var(--bg-input)', borderRadius:'var(--radius-md)', padding:'10px 14px', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+                <span style={{ fontSize:13, color:'var(--text-secondary)' }}>獲利（自動計算）</span>
+                <span className="text-mono" style={{ fontSize:14, fontWeight:600, color: sellProfit == null ? 'var(--text-muted)' : sellProfit >= 0 ? 'var(--profit)' : 'var(--loss)' }}>
+                  {sellProfit == null ? '—' : (sellProfit >= 0 ? '+' : '') + formatNTD(sellProfit)}
+                  {sellPct != null && <span style={{ fontSize:11, marginLeft:6, opacity:0.8 }}>({sellPct >= 0 ? '+' : ''}{sellPct.toFixed(2)}%)</span>}
+                </span>
+              </div>
+            </>
+          ) : (
+            <>
+              <div>
+                <p className="label" style={{ marginBottom:6 }}>日期</p>
+                <input className="input" type="date" value={div.record_date} onChange={e => setDivF('record_date', e.target.value)} />
+              </div>
+              <div>
+                <p className="label" style={{ marginBottom:6 }}>帳戶</p>
+                <select className="input" value={div.account_id} onChange={e => setDivF('account_id', e.target.value)}>
+                  {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                </select>
+              </div>
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+                <div>
+                  <p className="label" style={{ marginBottom:6 }}>市場</p>
+                  <select className="input" value={div.market} onChange={e => { setDivF('market', e.target.value); divTrigger(div.symbol, e.target.value) }}>
+                    {['TW','US','JP','CRYPTO','FUND'].map(m => <option key={m} value={m}>{MARKET_LABELS[m]}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <p className="label" style={{ marginBottom:6 }}>代號</p>
+                  <div style={{ position:'relative' }}>
+                    <input className="input" placeholder="例：0050" value={div.symbol}
+                      onChange={e => { setDivF('symbol', e.target.value); divTrigger(e.target.value, div.market) }}
+                      style={{ paddingRight: divLooking ? 36 : 14 }} />
+                    {divLooking && <div style={{ position:'absolute', right:10, top:'50%', transform:'translateY(-50%)' }}>
+                      <RefreshCw size={14} color="var(--accent-blue)" style={{ animation:'spin 1s linear infinite' }}/>
+                    </div>}
+                  </div>
+                </div>
+              </div>
+              <div>
+                <p className="label" style={{ marginBottom:6 }}>
+                  名稱
+                  {divLooking && <span style={{ color:'var(--accent-blue)', marginLeft:6, fontSize:10 }}>查詢中...</span>}
+                  {!divLooking && div.name && <span style={{ color:'var(--profit)', marginLeft:6, fontSize:10 }}>✓ 已自動帶入</span>}
+                </p>
+                <input className="input" placeholder="例：元大台灣50" value={div.name} onChange={e => setDivF('name', e.target.value)} />
+                {divError && <p style={{ fontSize:11, color:'var(--accent-amber)', marginTop:4 }}>{divError}</p>}
+              </div>
+              <div>
+                <p className="label" style={{ marginBottom:6 }}>股利金額 <span style={{ color:'var(--accent-blue)' }}>*</span></p>
+                <input className="input" type="number" placeholder="0" value={div.amount} onChange={e => setDivF('amount', e.target.value)} autoFocus />
+              </div>
+            </>
+          )}
+
           <button className="btn btn-primary" style={{ width:'100%', marginTop:4 }}
-            onClick={save} disabled={saving||!form.amount}>
-            {saving?'儲存中...':'新增紀錄'}
+            onClick={save} disabled={saving || !canSave}>
+            {saving ? '儲存中...' : '新增紀錄'}
           </button>
         </div>
       </div>
@@ -840,7 +952,7 @@ function PnlTab({ accounts }) {
     <div>
       <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:14 }}>
         <div className="card-sm">
-          <p className="label" style={{ marginBottom:4 }}>股利/利息</p>
+          <p className="label" style={{ marginBottom:4 }}>股利</p>
           <div className="medium-number" style={{ color:'var(--profit)' }}>+{formatNTD(totalDividend)}</div>
         </div>
         <div className="card-sm">
@@ -860,8 +972,9 @@ function PnlTab({ accounts }) {
           <Plus size={14}/> 新增
         </button>
       </div>
+      {/* 篩選 tag：只保留全部 / 股利 / 賣出 */}
       <div style={{ display:'flex', gap:6, marginBottom:14 }}>
-        {[['all','全部'],['dividend','股利/利息'],['sell','賣出損益']].map(([v,l])=>(
+        {[['all','全部'],['dividend','股利'],['sell','賣出']].map(([v,l])=>(
           <button key={v} onClick={()=>setPnlView(v)} style={{
             padding:'5px 12px', borderRadius:20, fontSize:12, cursor:'pointer',
             background:pnlView===v?'var(--accent-blue)':'var(--bg-input)',
@@ -876,26 +989,40 @@ function PnlTab({ accounts }) {
           ? <div style={{ textAlign:'center', padding:'40px 0', color:'var(--text-muted)', fontSize:13 }}>尚無損益紀錄</div>
           : (
             <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-              {filtered.map(r=>(
-                <div key={r.id} className="card-sm" style={{ display:'flex', alignItems:'center', gap:10 }}>
-                  <div style={{ width:32, height:32, borderRadius:8, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, background:Number(r.amount)>=0?'rgba(16,185,129,0.12)':'rgba(239,68,68,0.12)' }}>
-                    <DollarSign size={16} color={Number(r.amount)>=0?'var(--profit)':'var(--loss)'}/>
-                  </div>
-                  <div style={{ flex:1, minWidth:0 }}>
-                    <div style={{ display:'flex', alignItems:'center', gap:6 }}>
-                      <span style={{ fontSize:13, fontWeight:600, fontFamily:'DM Mono' }}>{r.symbol||'—'}</span>
-                      <span className="badge badge-neutral" style={{ fontSize:10 }}>{TYPE_LABELS[r.type]}</span>
+              {filtered.map(r=>{
+                const isSell = r.type === 'sell_profit'
+                const amt = Number(r.amount)
+                // 從 note 解析賣出時記錄的成本
+                const noteMatch = r.note?.match(/成本:(\S+)/)
+                const costStr = noteMatch ? noteMatch[1] : null
+                const costVal = costStr ? Number(costStr) : null
+                const pct = costVal && costVal > 0 ? (amt / costVal * 100) : null
+                return (
+                  <div key={r.id} className="card-sm" style={{ display:'flex', alignItems:'center', gap:10 }}>
+                    <div style={{ width:32, height:32, borderRadius:8, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0,
+                      background: isSell ? (amt>=0?'rgba(16,185,129,0.12)':'rgba(239,68,68,0.12)') : 'rgba(59,130,246,0.12)' }}>
+                      <DollarSign size={16} color={isSell ? (amt>=0?'var(--profit)':'var(--loss)') : 'var(--accent-blue)'}/>
                     </div>
-                    <p style={{ fontSize:11, color:'var(--text-muted)' }}>{formatDate(r.record_date)} · {accountMap[r.account_id]||''}</p>
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                        <span style={{ fontSize:13, fontWeight:600, fontFamily:'DM Mono' }}>{r.symbol||'—'}</span>
+                        <span className="badge badge-neutral" style={{ fontSize:10 }}>{TYPE_LABELS[r.type]}</span>
+                      </div>
+                      <p style={{ fontSize:11, color:'var(--text-muted)' }}>{formatDate(r.record_date)} · {accountMap[r.account_id]||''}</p>
+                    </div>
+                    <div style={{ textAlign:'right', flexShrink:0 }}>
+                      <p className="text-mono" style={{ fontSize:14, fontWeight:600, color: isSell ? formatPctColor(amt) : 'var(--accent-blue)' }}>
+                        {amt>=0?'+':''}{formatNTD(amt)}
+                      </p>
+                      {pct != null && (
+                        <p style={{ fontSize:11, color:formatPctColor(pct) }}>
+                          {pct>=0?'+':''}{pct.toFixed(2)}%
+                        </p>
+                      )}
+                    </div>
                   </div>
-                  <div style={{ textAlign:'right', flexShrink:0 }}>
-                    <p className="text-mono" style={{ fontSize:14, fontWeight:600, color:formatPctColor(r.amount) }}>
-                      {Number(r.amount)>=0?'+':''}{formatNTD(r.amount)}
-                    </p>
-                    {Number(r.tax)>0 && <p style={{ fontSize:11, color:'var(--text-muted)' }}>稅 {formatNTD(r.tax)}</p>}
-                  </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           )
       }
@@ -927,9 +1054,8 @@ export default function Invest() {
 
   async function loadUsdRate() {
     try {
-      const res = await fetch('/api/rates?currencies=USD')
-      const data = await res.json()
-      if (data?.USD) setUsdRate(data.USD)
+      const r = await getRates(['USD'])
+      if (r?.USD) setUsdRate(r.USD)
     } catch { /* 保持預設值 */ }
   }
 
