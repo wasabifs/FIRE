@@ -1,36 +1,24 @@
 // api/quote.js — Vercel Serverless Function
-// 放在專案根目錄的 api/ 資料夾
-// 前端呼叫：GET /api/quote?symbols=0050.TW,AAPL,7203.T
-
-import yahooFinance from 'yahoo-finance2'
 
 export default async function handler(req, res) {
-  // CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS')
   res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate=30')
 
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end()
-  }
+  if (req.method === 'OPTIONS') return res.status(200).end()
 
   const { symbols } = req.query
-  if (!symbols) {
-    return res.status(400).json({ error: 'symbols query param required' })
-  }
+  if (!symbols) return res.status(400).json({ error: 'symbols query param required' })
 
   const symbolList = symbols.split(',').map(s => s.trim()).filter(Boolean)
-  if (symbolList.length === 0) {
-    return res.status(400).json({ error: 'no valid symbols' })
-  }
 
   try {
+    // 用 require 方式避免 ESM default export 問題
+    const yf = await import('yahoo-finance2')
+    const yahooFinance = yf.default ?? yf
+
     const results = await Promise.allSettled(
-      symbolList.map(sym =>
-        yahooFinance.quote(sym, {
-          fields: ['regularMarketPrice', 'shortName', 'longName', 'currency', 'regularMarketChangePercent'],
-        })
-      )
+      symbolList.map(sym => yahooFinance.quote(sym))
     )
 
     const quotes = results.map((r, i) => {
