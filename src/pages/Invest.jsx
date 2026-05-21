@@ -40,16 +40,25 @@ function useSymbolLookup(symbol, market, onResult) {
   const [looking, setLooking] = useState(false)
   const [error, setError] = useState('')
 
+  // symbol 清空時自動清除 error
+  useEffect(() => {
+    if (!symbol.trim()) setError('')
+  }, [symbol])
+
   function trigger(sym, mkt) {
-    setError('')
     clearTimeout(timer.current)
+    setError('')
     if (!sym.trim() || !['TW','US','JP'].includes(mkt)) return
     timer.current = setTimeout(async () => {
       setLooking(true)
       const result = await lookupSymbol(sym.trim(), mkt)
       setLooking(false)
-      if (result) { setError(''); onResult(result) }
-      else if (sym.trim().length >= 2) setError('查無此代號，可手動填入名稱')
+      if (result) {
+        setError('') // 成功時再清一次，防止 race condition
+        onResult(result)
+      } else if (sym.trim().length >= 2) {
+        setError('查無此代號，可手動填入名稱')
+      }
     }, 800)
   }
 
@@ -521,6 +530,15 @@ function HoldingsTab({ accounts, refreshTick, onRefreshDone }) {
     const result = await fetchQuotes(allHoldings)
     setPrices(result)
     setQuoteStatus(Object.keys(result).length > 0 ? 'ok' : 'error')
+
+    // 將即時價格寫回 Supabase，讓 Assets 頁也能顯示正確現價與報酬率
+    const updates = allHoldings
+      .filter(h => result[`${h.market}:${h.symbol}`] != null)
+      .map(h => supabase.from('holdings')
+        .update({ current_price: result[`${h.market}:${h.symbol}`] })
+        .eq('id', h.id)
+      )
+    if (updates.length > 0) await Promise.all(updates)
   }, [allHoldings.length])
 
   useEffect(() => { loadQuotes() }, [accounts.length, refreshTick, localTick])
