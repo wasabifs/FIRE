@@ -691,7 +691,7 @@ export default function Assets() {
   const hasForeign = accounts.some(a => a.currency !== 'TWD')
 
   return (
-    <div className="page fade-in" style={{ paddingBottom:'calc(72px + env(safe-area-inset-bottom, 0px))' }}>
+    <div className="page fade-in">
       <PageHeader
         title="資產"
         subtitle={`淨資產 NT$ ${formatNTD(netAssets)}`}
