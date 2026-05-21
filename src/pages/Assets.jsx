@@ -278,7 +278,7 @@ function AddAssetModal({ accountId, accounts, onClose, onSaved }) {
           <div style={{ background:'var(--bg-input)', borderRadius:'var(--radius-md)', padding:'10px 14px', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
             <span style={{ fontSize:13, color:'var(--text-secondary)' }}>均價（自動計算）</span>
             <span className="text-mono" style={{ fontSize:15, fontWeight:600, color:avgCost?'var(--text-primary)':'var(--text-muted)' }}>
-              {avgCost ? formatNTD(avgCost.toFixed(4)) : '—'}
+              {avgCost ? formatNTD(Number(avgCost).toFixed(2)) : '—'}
             </span>
           </div>
           <button className="btn btn-primary" style={{ width:'100%', marginTop:4 }}
@@ -345,7 +345,7 @@ function EditHoldingModal({ holding, onClose, onSaved }) {
           <div style={{ background:'var(--bg-input)', borderRadius:'var(--radius-md)', padding:'10px 14px', display:'flex', justifyContent:'space-between' }}>
             <span style={{ fontSize:13, color:'var(--text-secondary)' }}>均價（自動計算）</span>
             <span className="text-mono" style={{ fontSize:13, fontWeight:600, color:avgCost?'var(--text-primary)':'var(--text-muted)' }}>
-              {avgCost ? formatNTD(avgCost.toFixed(4)) : '—'}
+              {avgCost ? formatNTD(Number(avgCost).toFixed(2)) : '—'}
             </span>
           </div>
           <button className="btn btn-primary" style={{ width:'100%' }} onClick={save} disabled={saving || !form.quantity || !form.total_cost}>
