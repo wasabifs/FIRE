@@ -72,8 +72,8 @@ body {
   overflow-y: auto;
   overflow-x: hidden;
   /*
-    BottomNav 的 bottom = env(safe-area-inset-bottom)，nav 高度 64px
-    所以 page 底部只需留 64px + 呼吸空間，不用再加 safe-area
+    nav 總高度 = 64px(圖示列) + env(safe-area-inset-bottom)(home indicator)
+    page 底部再加 16px 呼吸空間
   */
   padding: 16px 16px calc(64px + env(safe-area-inset-bottom, 0px) + 16px);
   -webkit-overflow-scrolling: touch;
