@@ -519,22 +519,23 @@ function AddPnlModal({ accounts, onClose, onSaved }) {
     <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.75)', zIndex:200,
       display:'flex', alignItems:'flex-end', justifyContent:'center' }}
       onClick={e => e.target === e.currentTarget && onClose()}>
-      {/* 從底部升起，固定高度可滾動 */}
+
       <div style={{
         width:'100%', maxWidth:480,
         background:'var(--bg-surface)',
-        borderRadius:'var(--radius-xl) var(--radius-xl) 0 0',
+        borderRadius:'24px 24px 0 0',
         border:'1px solid var(--border)',
-        maxHeight:'90vh',
+        height:'88vh',
         display:'flex', flexDirection:'column',
+        overflow:'hidden',
       }}>
-        {/* 固定標題列 */}
-        <div style={{ padding:'20px 20px 12px', borderBottom:'1px solid var(--border)', flexShrink:0 }}>
+
+        {/* ── 固定標題區 ── */}
+        <div style={{ padding:'20px 20px 14px', borderBottom:'1px solid var(--border)', flexShrink:0 }}>
           <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:14 }}>
             <h2 style={{ fontSize:18, fontWeight:600 }}>新增損益紀錄</h2>
             <button className="btn btn-icon" onClick={onClose}><X size={16}/></button>
           </div>
-          {/* 類型切換 */}
           <div style={{ display:'flex', background:'var(--bg-input)', borderRadius:10, padding:3 }}>
             {[['sell_profit','賣出'],['dividend','股利']].map(([v,l]) => (
               <button key={v} onClick={() => setType(v)} style={{
@@ -546,30 +547,34 @@ function AddPnlModal({ accounts, onClose, onSaved }) {
           </div>
         </div>
 
-        {/* 可滾動內容區 */}
-        <div style={{ overflowY:'auto', padding:'16px 20px', flex:1,
-          paddingBottom:'calc(16px + env(safe-area-inset-bottom, 0px))' }}>
-          <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+        {/* ── 可滾動內容區（iOS 關鍵：flex:'1 1 0' + minHeight:0）── */}
+        <div style={{
+          overflowY:'scroll',
+          WebkitOverflowScrolling:'touch',
+          flex:'1 1 0',
+          minHeight:0,
+          padding:'16px 20px',
+          paddingBottom:'calc(24px + env(safe-area-inset-bottom, 0px))',
+        }}>
+          <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
 
             {type === 'sell_profit' ? (
               <>
-                {/* 日期 */}
                 <div>
-                  <p className="label" style={{ marginBottom:6 }}>日期</p>
+                  <p className="label" style={{ marginBottom:5 }}>日期</p>
                   <input className="input" type="date" value={sell.record_date}
                     onChange={e => setSellF('record_date', e.target.value)} />
                 </div>
 
-                {/* 帳戶 ／ 市場 */}
                 <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
                   <div>
-                    <p className="label" style={{ marginBottom:6 }}>帳戶</p>
+                    <p className="label" style={{ marginBottom:5 }}>帳戶</p>
                     <select className="input" value={sell.account_id} onChange={e => setSellF('account_id', e.target.value)}>
                       {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
                     </select>
                   </div>
                   <div>
-                    <p className="label" style={{ marginBottom:6 }}>市場</p>
+                    <p className="label" style={{ marginBottom:5 }}>市場</p>
                     <select className="input" value={sell.market}
                       onChange={e => { setSellF('market', e.target.value); sellTrigger(sell.symbol, e.target.value) }}>
                       {['TW','US','JP','CRYPTO','FUND'].map(m => <option key={m} value={m}>{MARKET_LABELS[m]}</option>)}
@@ -577,10 +582,9 @@ function AddPnlModal({ accounts, onClose, onSaved }) {
                   </div>
                 </div>
 
-                {/* 代號 ／ 名稱 */}
                 <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
                   <div>
-                    <p className="label" style={{ marginBottom:6 }}>代號</p>
+                    <p className="label" style={{ marginBottom:5 }}>代號</p>
                     <div style={{ position:'relative' }}>
                       <input className="input" placeholder="例：0050" value={sell.symbol}
                         onChange={e => { setSellF('symbol', e.target.value); sellTrigger(e.target.value, sell.market) }}
@@ -591,9 +595,8 @@ function AddPnlModal({ accounts, onClose, onSaved }) {
                     </div>
                   </div>
                   <div>
-                    <p className="label" style={{ marginBottom:6 }}>
-                      名稱
-                      {!sellLooking && sell.name && <span style={{ color:'var(--profit)', marginLeft:5, fontSize:10 }}>✓</span>}
+                    <p className="label" style={{ marginBottom:5 }}>
+                      名稱{!sellLooking && sell.name && <span style={{ color:'var(--profit)', marginLeft:5, fontSize:10 }}>✓</span>}
                     </p>
                     <input className="input" placeholder="自動帶入" value={sell.name}
                       onChange={e => setSellF('name', e.target.value)} />
@@ -601,26 +604,24 @@ function AddPnlModal({ accounts, onClose, onSaved }) {
                 </div>
                 {sellError && <p style={{ fontSize:11, color:'var(--accent-amber)', marginTop:-4 }}>{sellError}</p>}
 
-                {/* 股數 ／ 總成本 ／ 成交價 */}
                 <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:8 }}>
                   <div>
-                    <p className="label" style={{ marginBottom:6 }}>股數</p>
+                    <p className="label" style={{ marginBottom:5, fontSize:11 }}>股數</p>
                     <input className="input" type="number" placeholder="0" step="0.00001"
                       value={sell.quantity} onChange={e => setSellF('quantity', e.target.value)} />
                   </div>
                   <div>
-                    <p className="label" style={{ marginBottom:6 }}>總成本</p>
+                    <p className="label" style={{ marginBottom:5, fontSize:11 }}>總成本</p>
                     <input className="input" type="number" placeholder="0"
                       value={sell.total_cost} onChange={e => setSellF('total_cost', e.target.value)} />
                   </div>
                   <div>
-                    <p className="label" style={{ marginBottom:6 }}>成交價 <span style={{ color:'var(--accent-blue)' }}>*</span></p>
+                    <p className="label" style={{ marginBottom:5, fontSize:11 }}>成交價 <span style={{ color:'var(--accent-blue)' }}>*</span></p>
                     <input className="input" type="number" placeholder="0"
                       value={sell.sell_amount} onChange={e => setSellF('sell_amount', e.target.value)} />
                   </div>
                 </div>
 
-                {/* 獲利自動計算 */}
                 <div style={{ background:'var(--bg-input)', borderRadius:'var(--radius-md)', padding:'10px 14px', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
                   <span style={{ fontSize:13, color:'var(--text-secondary)' }}>獲利（自動計算）</span>
                   <span className="text-mono" style={{ fontSize:14, fontWeight:600,
@@ -638,23 +639,21 @@ function AddPnlModal({ accounts, onClose, onSaved }) {
               </>
             ) : (
               <>
-                {/* 日期 */}
                 <div>
-                  <p className="label" style={{ marginBottom:6 }}>日期</p>
+                  <p className="label" style={{ marginBottom:5 }}>日期</p>
                   <input className="input" type="date" value={div.record_date}
                     onChange={e => setDivF('record_date', e.target.value)} />
                 </div>
 
-                {/* 帳戶 ／ 市場 */}
                 <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
                   <div>
-                    <p className="label" style={{ marginBottom:6 }}>帳戶</p>
+                    <p className="label" style={{ marginBottom:5 }}>帳戶</p>
                     <select className="input" value={div.account_id} onChange={e => setDivF('account_id', e.target.value)}>
                       {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
                     </select>
                   </div>
                   <div>
-                    <p className="label" style={{ marginBottom:6 }}>市場</p>
+                    <p className="label" style={{ marginBottom:5 }}>市場</p>
                     <select className="input" value={div.market}
                       onChange={e => { setDivF('market', e.target.value); divTrigger(div.symbol, e.target.value) }}>
                       {['TW','US','JP','CRYPTO','FUND'].map(m => <option key={m} value={m}>{MARKET_LABELS[m]}</option>)}
@@ -662,10 +661,9 @@ function AddPnlModal({ accounts, onClose, onSaved }) {
                   </div>
                 </div>
 
-                {/* 代號 ／ 名稱 */}
                 <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
                   <div>
-                    <p className="label" style={{ marginBottom:6 }}>代號</p>
+                    <p className="label" style={{ marginBottom:5 }}>代號</p>
                     <div style={{ position:'relative' }}>
                       <input className="input" placeholder="例：0050" value={div.symbol}
                         onChange={e => { setDivF('symbol', e.target.value); divTrigger(e.target.value, div.market) }}
@@ -676,9 +674,8 @@ function AddPnlModal({ accounts, onClose, onSaved }) {
                     </div>
                   </div>
                   <div>
-                    <p className="label" style={{ marginBottom:6 }}>
-                      名稱
-                      {!divLooking && div.name && <span style={{ color:'var(--profit)', marginLeft:5, fontSize:10 }}>✓</span>}
+                    <p className="label" style={{ marginBottom:5 }}>
+                      名稱{!divLooking && div.name && <span style={{ color:'var(--profit)', marginLeft:5, fontSize:10 }}>✓</span>}
                     </p>
                     <input className="input" placeholder="自動帶入" value={div.name}
                       onChange={e => setDivF('name', e.target.value)} />
@@ -686,19 +683,19 @@ function AddPnlModal({ accounts, onClose, onSaved }) {
                 </div>
                 {divError && <p style={{ fontSize:11, color:'var(--accent-amber)', marginTop:-4 }}>{divError}</p>}
 
-                {/* 股利金額 */}
                 <div>
-                  <p className="label" style={{ marginBottom:6 }}>股利金額 <span style={{ color:'var(--accent-blue)' }}>*</span></p>
+                  <p className="label" style={{ marginBottom:5 }}>股利金額 <span style={{ color:'var(--accent-blue)' }}>*</span></p>
                   <input className="input" type="number" placeholder="0"
                     value={div.amount} onChange={e => setDivF('amount', e.target.value)} />
                 </div>
               </>
             )}
 
-            <button className="btn btn-primary" style={{ width:'100%', marginTop:6 }}
+            <button className="btn btn-primary" style={{ width:'100%', marginTop:4 }}
               onClick={save} disabled={saving || !canSave}>
               {saving ? '儲存中...' : '新增紀錄'}
             </button>
+
           </div>
         </div>
       </div>
