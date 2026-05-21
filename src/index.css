@@ -71,8 +71,11 @@ body {
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
-  /* bottom padding = nav height + safe area (for home indicator) + breathing room */
-  padding: 16px 16px calc(var(--nav-height) + env(safe-area-inset-bottom, 0px) + 20px);
+  /*
+    padding-bottom = nav 高度(64px) + iPhone home indicator + 呼吸空間(16px)
+    用 calc 確保在 safe-area 為 0 的裝置（Android/桌面）也正常
+  */
+  padding: 16px 16px calc(var(--nav-height) + env(safe-area-inset-bottom, 0px) + 16px);
   -webkit-overflow-scrolling: touch;
 }
 
