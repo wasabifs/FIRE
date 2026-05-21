@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Plus, RefreshCw, X, ArrowUpRight, ArrowDownRight, DollarSign, Search } from 'lucide-react'
+import { Plus, RefreshCw, X, ArrowUpRight, ArrowDownRight, DollarSign, Edit2 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { formatNTD, formatPct, formatPctColor, formatDate } from '../lib/format'
 import { fetchQuotes, lookupSymbol } from '../lib/quote'
@@ -8,25 +8,16 @@ import PageHeader from '../components/layout/PageHeader'
 const TABS = ['持倉', '交易', '損益']
 const MARKETS = ['全部', 'TW', 'US', 'JP', 'CRYPTO', 'FUND']
 const MARKET_LABELS = { 全部:'全部', TW:'台股', US:'美股', JP:'日股', CRYPTO:'加密', FUND:'基金' }
-const MARKET_FLAGS = { TW:'🇹🇼', US:'🇺🇸', JP:'🇯🇵', CRYPTO:'🔗', FUND:'📦' }
 const SORT_OPTIONS = ['市值', '損益', '報酬率', '代號']
 
-// 帳戶類型（與資產頁一致）
 const ACCOUNT_TYPE_LABELS = {
-  brokerage:   '證券帳戶',
-  bank:        '銀行帳戶',
-  fund:        '基金帳戶',
-  insurance:   '保單',
-  real_estate: '不動產',
-  crypto:      '加密貨幣',
-  debt:        '負債',
+  brokerage:'證券帳戶', bank:'銀行帳戶', fund:'基金帳戶',
+  insurance:'保單', real_estate:'不動產', crypto:'加密貨幣', debt:'負債',
 }
 
 const ASSET_TYPES = [
-  { value:'stock',  label:'股票' },
-  { value:'etf',    label:'ETF' },
-  { value:'fund',   label:'基金' },
-  { value:'crypto', label:'加密幣' },
+  { value:'stock', label:'股票' }, { value:'etf', label:'ETF' },
+  { value:'fund', label:'基金' }, { value:'crypto', label:'加密幣' },
 ]
 
 function TabBar({ tabs, active, onChange }) {
@@ -57,7 +48,6 @@ function AddHoldingModal({ accounts, onClose, onSaved }) {
   const symbolTimer = useRef(null)
   const set = (k,v) => setForm(f=>({...f,[k]:v}))
 
-  // 代號輸入後自動查詢名稱
   function handleSymbolChange(val) {
     set('symbol', val)
     setLookupError('')
@@ -68,15 +58,11 @@ function AddHoldingModal({ accounts, onClose, onSaved }) {
       setLookingUp(true)
       const result = await lookupSymbol(trimmed, form.market)
       setLookingUp(false)
-      if (result) {
-        set('name', result.name)
-      } else if (trimmed.length >= 2) {
-        setLookupError('查無此代號，可手動填入名稱')
-      }
+      if (result) { set('name', result.name) }
+      else if (trimmed.length >= 2) setLookupError('查無此代號，可手動填入名稱')
     }, 800)
   }
 
-  // 切換市場時，若已有代號則重新查詢
   function handleMarketChange(market) {
     set('market', market)
     setLookupError('')
@@ -92,8 +78,7 @@ function AddHoldingModal({ accounts, onClose, onSaved }) {
   }
 
   const avgCost = (form.quantity && form.total_cost && Number(form.quantity) > 0)
-    ? Number(form.total_cost) / Number(form.quantity)
-    : null
+    ? Number(form.total_cost) / Number(form.quantity) : null
 
   async function save() {
     if (!form.symbol||!form.quantity||!form.total_cost) return
@@ -102,11 +87,8 @@ function AddHoldingModal({ accounts, onClose, onSaved }) {
       account_id: form.account_id,
       symbol: form.symbol.trim().toUpperCase(),
       name: form.name.trim() || form.symbol.trim().toUpperCase(),
-      market: form.market,
-      asset_type: form.asset_type,
-      quantity: Number(form.quantity),
-      avg_cost: avgCost||0,
-      current_price: avgCost||0,
+      market: form.market, asset_type: form.asset_type,
+      quantity: Number(form.quantity), avg_cost: avgCost||0, current_price: avgCost||0,
     })
     setSaving(false); onSaved()
   }
@@ -120,30 +102,18 @@ function AddHoldingModal({ accounts, onClose, onSaved }) {
           <button className="btn btn-icon" onClick={onClose}><X size={16}/></button>
         </div>
         <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
-
-          {/* 資產類型 — 下拉選單 */}
           <div>
             <p className="label" style={{ marginBottom:6 }}>資產類型</p>
             <select className="input" value={form.asset_type} onChange={e=>set('asset_type',e.target.value)}>
-              {ASSET_TYPES.map(({value,label})=>(
-                <option key={value} value={value}>{label}</option>
-              ))}
+              {ASSET_TYPES.map(({value,label})=><option key={value} value={value}>{label}</option>)}
             </select>
           </div>
-
-          {/* 帳戶 */}
           <div>
             <p className="label" style={{ marginBottom:6 }}>帳戶</p>
             <select className="input" value={form.account_id} onChange={e=>set('account_id',e.target.value)}>
-              {accounts.map(a=>(
-                <option key={a.id} value={a.id}>
-                  {a.name}{a.type ? ` · ${ACCOUNT_TYPE_LABELS[a.type]||a.type}` : ''}
-                </option>
-              ))}
+              {accounts.map(a=><option key={a.id} value={a.id}>{a.name}{a.type?` · ${ACCOUNT_TYPE_LABELS[a.type]||a.type}`:''}</option>)}
             </select>
           </div>
-
-          {/* 市場 + 代號 */}
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
             <div>
               <p className="label" style={{ marginBottom:6 }}>市場</p>
@@ -152,14 +122,11 @@ function AddHoldingModal({ accounts, onClose, onSaved }) {
               </select>
             </div>
             <div>
-              <p className="label" style={{ marginBottom:6 }}>
-                代號 <span style={{ color:'var(--accent-blue)' }}>*</span>
-              </p>
+              <p className="label" style={{ marginBottom:6 }}>代號 <span style={{ color:'var(--accent-blue)' }}>*</span></p>
               <div style={{ position:'relative' }}>
                 <input className="input" placeholder="例：0050" value={form.symbol}
                   onChange={e=>handleSymbolChange(e.target.value)}
-                  style={{ paddingRight: lookingUp ? 36 : 14 }}
-                  autoFocus />
+                  style={{ paddingRight: lookingUp ? 36 : 14 }} autoFocus />
                 {lookingUp && (
                   <div style={{ position:'absolute', right:10, top:'50%', transform:'translateY(-50%)' }}>
                     <RefreshCw size={14} color="var(--accent-blue)" style={{ animation:'spin 1s linear infinite' }}/>
@@ -168,22 +135,15 @@ function AddHoldingModal({ accounts, onClose, onSaved }) {
               </div>
             </div>
           </div>
-
-          {/* 名稱 */}
           <div>
             <p className="label" style={{ marginBottom:6 }}>
               名稱
               {lookingUp && <span style={{ color:'var(--accent-blue)', marginLeft:6, fontSize:10 }}>查詢中...</span>}
               {!lookingUp && form.name && <span style={{ color:'var(--profit)', marginLeft:6, fontSize:10 }}>✓ 已自動帶入</span>}
             </p>
-            <input className="input" placeholder="例：元大台灣50" value={form.name}
-              onChange={e=>set('name',e.target.value)} />
-            {lookupError && (
-              <p style={{ fontSize:11, color:'var(--accent-amber)', marginTop:4 }}>{lookupError}</p>
-            )}
+            <input className="input" placeholder="例：元大台灣50" value={form.name} onChange={e=>set('name',e.target.value)} />
+            {lookupError && <p style={{ fontSize:11, color:'var(--accent-amber)', marginTop:4 }}>{lookupError}</p>}
           </div>
-
-          {/* 股數 + 總成本 */}
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
             <div>
               <p className="label" style={{ marginBottom:6 }}>股數 <span style={{ color:'var(--accent-blue)' }}>*</span></p>
@@ -196,19 +156,89 @@ function AddHoldingModal({ accounts, onClose, onSaved }) {
                 value={form.total_cost} onChange={e=>set('total_cost',e.target.value)} />
             </div>
           </div>
-
-          {/* 均價顯示 */}
           <div style={{ background:'var(--bg-input)', borderRadius:'var(--radius-md)', padding:'10px 14px', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
             <span style={{ fontSize:13, color:'var(--text-secondary)' }}>均價（自動計算）</span>
             <span className="text-mono" style={{ fontSize:15, fontWeight:600, color:avgCost?'var(--text-primary)':'var(--text-muted)' }}>
               {avgCost ? formatNTD(avgCost.toFixed(4)) : '—'}
             </span>
           </div>
-
           <button className="btn btn-primary" style={{ width:'100%', marginTop:4 }}
             onClick={save} disabled={saving||!form.symbol||!form.quantity||!form.total_cost}>
             {saving?'儲存中...':'新增持倉'}
           </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── 編輯持倉 Modal ──────────────────────────────────────────
+function EditHoldingModal({ holding, onClose, onSaved }) {
+  const [form, setForm] = useState({
+    quantity: String(holding.quantity),
+    avg_cost: String(holding.avg_cost),
+  })
+  const [saving, setSaving] = useState(false)
+  const set = (k,v) => setForm(f=>({...f,[k]:v}))
+
+  async function save() {
+    if (!form.quantity || !form.avg_cost) return
+    setSaving(true)
+    await supabase.from('holdings').update({
+      quantity: Number(form.quantity),
+      avg_cost: Number(form.avg_cost),
+    }).eq('id', holding.id)
+    setSaving(false); onSaved()
+  }
+
+  async function remove() {
+    if (!confirm(`確定刪除 ${holding.symbol} 持倉？`)) return
+    setSaving(true)
+    await supabase.from('holdings').delete().eq('id', holding.id)
+    setSaving(false); onSaved()
+  }
+
+  return (
+    <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.75)', zIndex:200, display:'flex', alignItems:'center', justifyContent:'center', padding:'0 16px' }}
+      onClick={e=>e.target===e.currentTarget&&onClose()}>
+      <div style={{ width:'100%', maxWidth:360, background:'var(--bg-surface)', borderRadius:'var(--radius-xl)', padding:'24px 20px 28px', border:'1px solid var(--border)' }}>
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:20 }}>
+          <div>
+            <h2 style={{ fontSize:18, fontWeight:600 }}>{holding.symbol}</h2>
+            <p style={{ fontSize:12, color:'var(--text-muted)', marginTop:2 }}>{holding.name}</p>
+          </div>
+          <button className="btn btn-icon" onClick={onClose}><X size={16}/></button>
+        </div>
+        <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+            <div>
+              <p className="label" style={{ marginBottom:6 }}>股數</p>
+              <input className="input" type="number" step="0.00001"
+                value={form.quantity} onChange={e=>set('quantity',e.target.value)} autoFocus />
+            </div>
+            <div>
+              <p className="label" style={{ marginBottom:6 }}>均價</p>
+              <input className="input" type="number" step="0.0001"
+                value={form.avg_cost} onChange={e=>set('avg_cost',e.target.value)} />
+            </div>
+          </div>
+          {form.quantity && form.avg_cost && (
+            <div style={{ background:'var(--bg-input)', borderRadius:'var(--radius-md)', padding:'10px 14px', display:'flex', justifyContent:'space-between' }}>
+              <span style={{ fontSize:13, color:'var(--text-secondary)' }}>總成本</span>
+              <span className="text-mono" style={{ fontSize:13, fontWeight:500 }}>
+                {formatNTD(Number(form.quantity) * Number(form.avg_cost))}
+              </span>
+            </div>
+          )}
+          <button className="btn btn-primary" style={{ width:'100%' }}
+            onClick={save} disabled={saving||!form.quantity||!form.avg_cost}>
+            {saving?'儲存中...':'儲存變更'}
+          </button>
+          <button onClick={remove} disabled={saving} style={{
+            width:'100%', padding:'10px', borderRadius:'var(--radius-md)',
+            border:'1px solid rgba(239,68,68,0.3)', background:'rgba(239,68,68,0.08)',
+            color:'var(--loss)', fontSize:13, cursor:'pointer', fontFamily:'DM Sans',
+          }}>刪除此持倉</button>
         </div>
       </div>
     </div>
@@ -415,14 +445,17 @@ function AddPnlModal({ accounts, onClose, onSaved }) {
 }
 
 // ── 持倉分頁 ───────────────────────────────────────────────
-function HoldingsTab({ accounts, refreshTick }) {
+function HoldingsTab({ accounts, refreshTick, onRefreshDone }) {
   const [marketFilter, setMarketFilter] = useState('全部')
+  const [accountFilter, setAccountFilter] = useState('全部')
   const [sortBy, setSortBy] = useState('市值')
   const [prices, setPrices] = useState({})
-  const [quoteStatus, setQuoteStatus] = useState('idle') // idle | loading | ok | error
+  const [quoteStatus, setQuoteStatus] = useState('idle')
+  const [editHolding, setEditHolding] = useState(null)
+  const [localTick, setLocalTick] = useState(0)
 
   const allHoldings = accounts.flatMap(acc =>
-    (acc.holdings||[]).filter(h=>h.asset_type!=='cash').map(h=>({...h, accountName:acc.name}))
+    (acc.holdings||[]).filter(h=>h.asset_type!=='cash').map(h=>({...h, accountName:acc.name, accountId:acc.id}))
   )
 
   const loadQuotes = useCallback(async () => {
@@ -433,36 +466,48 @@ function HoldingsTab({ accounts, refreshTick }) {
     setQuoteStatus(Object.keys(result).length > 0 ? 'ok' : 'error')
   }, [allHoldings.length])
 
-  useEffect(() => { loadQuotes() }, [accounts.length, refreshTick])
+  useEffect(() => { loadQuotes() }, [accounts.length, refreshTick, localTick])
 
   function getPrice(h) {
-    const key = `${h.market}:${h.symbol}`
-    return prices[key] || Number(h.current_price) || 0
+    return prices[`${h.market}:${h.symbol}`] || Number(h.current_price) || 0
   }
 
-  const filtered = (marketFilter==='全部' ? allHoldings : allHoldings.filter(h=>h.market===marketFilter))
-    .map(h => {
-      const price = getPrice(h)
-      const qty = Number(h.quantity)
-      const avg = Number(h.avg_cost)
-      const marketVal = price * qty
-      const cost = avg * qty
-      const pnl = marketVal - cost
-      const pct = cost > 0 ? (pnl/cost)*100 : 0
-      return { ...h, price, marketVal, cost, pnl, pct }
-    })
-    .sort((a,b) => {
-      if (sortBy==='市值') return b.marketVal - a.marketVal
-      if (sortBy==='損益') return b.pnl - a.pnl
-      if (sortBy==='報酬率') return b.pct - a.pct
-      if (sortBy==='代號') return a.symbol.localeCompare(b.symbol)
-      return 0
-    })
+  const accountOptions = [{ id:'全部', name:'全部' }, ...accounts]
+
+  let filtered = allHoldings
+  if (marketFilter !== '全部') filtered = filtered.filter(h => h.market === marketFilter)
+  if (accountFilter !== '全部') filtered = filtered.filter(h => h.accountId === accountFilter)
+
+  filtered = filtered.map(h => {
+    const price = getPrice(h)
+    const qty = Number(h.quantity)
+    const avg = Number(h.avg_cost)
+    const marketVal = price * qty
+    const cost = avg * qty
+    const pnl = marketVal - cost
+    const pct = cost > 0 ? (pnl/cost)*100 : 0
+    return { ...h, price, marketVal, cost, pnl, pct }
+  }).sort((a,b) => {
+    if (sortBy==='市值') return b.marketVal - a.marketVal
+    if (sortBy==='損益') return b.pnl - a.pnl
+    if (sortBy==='報酬率') return b.pct - a.pct
+    if (sortBy==='代號') return a.symbol.localeCompare(b.symbol)
+    return 0
+  })
 
   const totalMarket = filtered.reduce((s,h)=>s+h.marketVal, 0)
   const totalCost   = filtered.reduce((s,h)=>s+h.cost, 0)
   const totalPnl    = totalMarket - totalCost
   const totalPct    = totalCost > 0 ? (totalPnl/totalCost)*100 : 0
+
+  const chipBtn = (active, label, onClick) => (
+    <button onClick={onClick} style={{
+      padding:'4px 10px', borderRadius:20, fontSize:12, cursor:'pointer', whiteSpace:'nowrap', flexShrink:0,
+      background:active?'var(--accent-blue)':'var(--bg-input)',
+      color:active?'white':'var(--text-secondary)',
+      border:active?'1px solid var(--accent-blue)':'1px solid var(--border)',
+    }}>{label}</button>
+  )
 
   return (
     <div>
@@ -479,26 +524,25 @@ function HoldingsTab({ accounts, refreshTick }) {
         </div>
       </div>
 
-      {/* Quote status */}
       {quoteStatus === 'error' && (
         <div style={{ background:'rgba(245,158,11,0.1)', border:'1px solid rgba(245,158,11,0.3)', borderRadius:'var(--radius-md)', padding:'8px 12px', marginBottom:12, fontSize:12, color:'var(--accent-amber)' }}>
           ⚠️ 無法取得即時報價，顯示最後儲存的價格
         </div>
       )}
 
-      {/* Market filter */}
-      <div style={{ display:'flex', gap:5, overflowX:'auto', paddingBottom:2, marginBottom:12 }}>
-        {MARKETS.map(m=>(
-          <button key={m} onClick={()=>setMarketFilter(m)} style={{
-            padding:'4px 10px', borderRadius:20, fontSize:12, cursor:'pointer', whiteSpace:'nowrap', flexShrink:0,
-            background:marketFilter===m?'var(--accent-blue)':'var(--bg-input)',
-            color:marketFilter===m?'white':'var(--text-secondary)',
-            border:marketFilter===m?'1px solid var(--accent-blue)':'1px solid var(--border)',
-          }}>{MARKET_FLAGS[m]||''} {MARKET_LABELS[m]}</button>
-        ))}
+      {/* 市場篩選（無 emoji） */}
+      <div style={{ display:'flex', gap:5, overflowX:'auto', paddingBottom:2, marginBottom:8 }}>
+        {MARKETS.map(m => chipBtn(marketFilter===m, MARKET_LABELS[m], ()=>setMarketFilter(m)))}
       </div>
 
-      {/* Sort row */}
+      {/* 帳戶篩選（有多帳戶時才顯示） */}
+      {accounts.length > 1 && (
+        <div style={{ display:'flex', gap:5, overflowX:'auto', paddingBottom:2, marginBottom:8 }}>
+          {accountOptions.map(a => chipBtn(accountFilter===a.id, a.name, ()=>setAccountFilter(a.id)))}
+        </div>
+      )}
+
+      {/* 排序 */}
       <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:12 }}>
         <span style={{ fontSize:11, color:'var(--text-muted)', flexShrink:0 }}>排序</span>
         {SORT_OPTIONS.map(s=>(
@@ -511,62 +555,81 @@ function HoldingsTab({ accounts, refreshTick }) {
         ))}
       </div>
 
-      {/* Holdings list — 改為卡片式，每筆佔完整寬度 */}
+      {/* 持倉列表 */}
       {filtered.length===0 ? (
         <div style={{ textAlign:'center', padding:'40px 0', color:'var(--text-muted)', fontSize:13 }}>尚無持倉資料</div>
       ) : (
-        <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+        <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
           {filtered.map(h=>(
-            <div key={h.id} className="card-sm" style={{ padding:'12px 14px' }}>
-              {/* 上排：代號 + 名稱 + 市場標籤 ｜ 損益% */}
-              <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', marginBottom:8 }}>
-                <div style={{ minWidth:0, flex:1 }}>
-                  <div style={{ display:'flex', alignItems:'center', gap:6, flexWrap:'wrap' }}>
-                    <span style={{ fontSize:15, fontWeight:700, color:'var(--text-primary)', fontFamily:'DM Mono' }}>{h.symbol}</span>
-                    <span style={{ fontSize:10, color:'var(--text-muted)', background:'var(--bg-input)', padding:'2px 6px', borderRadius:4, flexShrink:0 }}>
-                      {MARKET_FLAGS[h.market]||''} {h.market}
-                    </span>
-                    {quoteStatus === 'loading' && (
-                      <span style={{ width:6, height:6, borderRadius:'50%', background:'var(--accent-blue)', display:'inline-block', animation:'pulse 1s ease-in-out infinite' }}/>
-                    )}
+            <div key={h.id} className="card-sm" style={{ padding:'10px 12px' }}>
+              {/* 主行 */}
+              <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                {/* 左：代號/名稱/市場 */}
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ display:'flex', alignItems:'center', gap:5 }}>
+                    <span style={{ fontSize:14, fontWeight:700, fontFamily:'DM Mono', color:'var(--text-primary)' }}>{h.symbol}</span>
+                    <span style={{ fontSize:10, color:'var(--text-muted)', background:'var(--bg-input)', padding:'1px 5px', borderRadius:4 }}>{h.market}</span>
+                    {quoteStatus==='loading' && <span style={{ width:5, height:5, borderRadius:'50%', background:'var(--accent-blue)', display:'inline-block', animation:'pulse 1s ease-in-out infinite' }}/>}
                   </div>
-                  <p style={{ fontSize:12, color:'var(--text-secondary)', marginTop:2, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', maxWidth:180 }}>
-                    {h.name || '—'}
+                  <p style={{ fontSize:11, color:'var(--text-secondary)', marginTop:1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                    {h.name} · {h.accountName}
                   </p>
-                  <p style={{ fontSize:11, color:'var(--text-muted)', marginTop:1 }}>{h.accountName}</p>
                 </div>
-                {/* 損益% + 損益金額 */}
-                <div style={{ textAlign:'right', flexShrink:0, marginLeft:12 }}>
-                  <span style={{ fontSize:16, fontWeight:700, fontFamily:'DM Mono', color:h.cost>0?formatPctColor(h.pct):'var(--text-muted)' }}>
+
+                {/* 中：現價/股數 */}
+                <div style={{ textAlign:'right', flexShrink:0 }}>
+                  <p style={{ fontSize:13, fontFamily:'DM Mono', fontWeight:600, color:'var(--text-primary)' }}>
+                    {h.price > 0 ? formatNTD(h.price) : '—'}
+                  </p>
+                  <p style={{ fontSize:11, color:'var(--text-muted)', marginTop:1 }}>
+                    {Number(h.quantity).toLocaleString('en-US', {maximumFractionDigits:4})} 股
+                  </p>
+                </div>
+
+                {/* 右：損益% */}
+                <div style={{ textAlign:'right', flexShrink:0, minWidth:58 }}>
+                  <p style={{ fontSize:13, fontFamily:'DM Mono', fontWeight:700, color:h.cost>0?formatPctColor(h.pct):'var(--text-muted)' }}>
                     {h.cost>0 ? (h.pct>=0?'+':'')+h.pct.toFixed(2)+'%' : '—'}
-                  </span>
-                  {h.cost>0 && (
-                    <p style={{ fontSize:11, color:formatPctColor(h.pnl), fontFamily:'DM Mono', marginTop:2 }}>
-                      {h.pnl>=0?'+':''}{formatNTD(h.pnl)}
-                    </p>
-                  )}
+                  </p>
+                  <p style={{ fontSize:11, color:formatPctColor(h.pnl), fontFamily:'DM Mono', marginTop:1 }}>
+                    {h.cost>0 ? (h.pnl>=0?'+':'')+formatNTD(h.pnl) : ''}
+                  </p>
                 </div>
+
+                {/* 編輯 */}
+                <button onClick={()=>setEditHolding(h)} style={{
+                  flexShrink:0, width:28, height:28, borderRadius:6,
+                  background:'var(--bg-input)', border:'1px solid var(--border)',
+                  display:'flex', alignItems:'center', justifyContent:'center',
+                  cursor:'pointer', color:'var(--text-muted)',
+                }}>
+                  <Edit2 size={12}/>
+                </button>
               </div>
 
-              {/* 下排：股數 · 均價 · 現價 · 市值 */}
-              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr 1fr', gap:0, background:'var(--bg-input)', borderRadius:'var(--radius-sm)', padding:'8px 10px' }}>
-                {[
-                  { label:'股數', value: Number(h.quantity).toLocaleString('en-US', { maximumFractionDigits:5 }) },
-                  { label:'均價', value: formatNTD(h.avg_cost) },
-                  { label:'現價', value: h.price > 0 ? formatNTD(h.price) : '—', highlight: h.price > 0 },
-                  { label:'市值', value: formatNTD(h.marketVal) },
-                ].map(({label, value, highlight})=>(
-                  <div key={label} style={{ textAlign:'center' }}>
-                    <p style={{ fontSize:10, color:'var(--text-muted)', marginBottom:3 }}>{label}</p>
-                    <p style={{ fontSize:12, fontFamily:'DM Mono', fontWeight:500, color: highlight ? 'var(--text-primary)' : 'var(--text-secondary)' }}>
-                      {value}
-                    </p>
-                  </div>
-                ))}
+              {/* 次行：均價 · 市值 · 成本 */}
+              <div style={{ display:'flex', gap:12, marginTop:7, paddingTop:7, borderTop:'1px solid var(--border)' }}>
+                <span style={{ fontSize:11, color:'var(--text-muted)' }}>
+                  均價 <span style={{ color:'var(--text-secondary)', fontFamily:'DM Mono' }}>{formatNTD(h.avg_cost)}</span>
+                </span>
+                <span style={{ fontSize:11, color:'var(--text-muted)' }}>
+                  市值 <span style={{ color:'var(--text-secondary)', fontFamily:'DM Mono' }}>{formatNTD(h.marketVal)}</span>
+                </span>
+                <span style={{ fontSize:11, color:'var(--text-muted)' }}>
+                  成本 <span style={{ color:'var(--text-secondary)', fontFamily:'DM Mono' }}>{formatNTD(h.cost)}</span>
+                </span>
               </div>
             </div>
           ))}
         </div>
+      )}
+
+      {editHolding && (
+        <EditHoldingModal
+          holding={editHolding}
+          onClose={()=>setEditHolding(null)}
+          onSaved={()=>{ setEditHolding(null); setLocalTick(t=>t+1); onRefreshDone() }}
+        />
       )}
       <style>{`@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }`}</style>
     </div>
@@ -648,7 +711,7 @@ function TransactionsTab({ accounts }) {
                     <div style={{ display:'flex', alignItems:'center', gap:6 }}>
                       <span style={{ fontSize:14, fontWeight:700, fontFamily:'DM Mono' }}>{t.symbol}</span>
                       <span className={`badge ${t.type==='buy'?'badge-profit':'badge-loss'}`} style={{ fontSize:10 }}>{t.type==='buy'?'買入':'賣出'}</span>
-                      <span style={{ fontSize:10, color:'var(--text-muted)' }}>{MARKET_FLAGS[t.market]||''} {t.market}</span>
+                      <span style={{ fontSize:10, color:'var(--text-muted)' }}>{t.market}</span>
                     </div>
                     <p style={{ fontSize:11, color:'var(--text-muted)', marginTop:1 }}>{formatDate(t.trade_date)} · {accountMap[t.account_id]||''}</p>
                     {t.note && <p style={{ fontSize:11, color:'var(--text-secondary)', marginTop:1 }}>{t.note}</p>}
@@ -827,7 +890,13 @@ export default function Invest() {
         ? [1,2,3].map(i=><div key={i} className="skeleton" style={{ height:68, borderRadius:'var(--radius-md)', marginBottom:8 }}/>)
         : (
           <>
-            {tab==='持倉' && <HoldingsTab accounts={accounts} refreshTick={refreshTick}/>}
+            {tab==='持倉' && (
+              <HoldingsTab
+                accounts={accounts}
+                refreshTick={refreshTick}
+                onRefreshDone={()=>setRefreshTick(t=>t+1)}
+              />
+            )}
             {tab==='交易' && <TransactionsTab accounts={accounts}/>}
             {tab==='損益' && <PnlTab accounts={accounts}/>}
           </>
