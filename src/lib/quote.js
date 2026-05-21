@@ -1,13 +1,13 @@
 /**
  * 股價與標的名稱查詢
- * 台股名稱：TWSE/TPEx OpenAPI（支援 CORS，免費）
- * 現價：/api/quote serverless
+ * 全部走 /api/quote serverless（server 端無 CORS 限制）
+ * 台股名稱由 server 端打 TWSE OpenAPI 取得中文名
  */
 
 const PRICE_CACHE = {}
-const NAME_CACHE = {}
-const PRICE_TTL = 60 * 1000
-const NAME_TTL  = 60 * 60 * 1000
+const NAME_CACHE  = {}
+const PRICE_TTL = 60 * 1000       // 1 分鐘
+const NAME_TTL  = 60 * 60 * 1000  // 1 小時
 
 function yahooSymbol(symbol, market) {
   if (market === 'TW') return `${symbol}.TW`
@@ -15,64 +15,24 @@ function yahooSymbol(symbol, market) {
   return symbol
 }
 
-// ── 台股名稱：TWSE / TPEx OpenAPI ────────────────────────
-async function fetchTWSEName(symbol) {
-  const sym = symbol.trim().toUpperCase()
-  const cacheKey = `TW:${sym}`
-  if (NAME_CACHE[cacheKey] && Date.now() - NAME_CACHE[cacheKey].ts < NAME_TTL) {
-    return NAME_CACHE[cacheKey].name
-  }
-
-  const tryJSON = async (url, codeField, nameField) => {
-    try {
-      const r = await fetch(url, {
-        signal: AbortSignal.timeout(8000),
-        headers: { 'Accept': 'application/json' }
-      })
-      if (!r.ok) { console.warn(`TWSE API ${url} returned ${r.status}`); return null }
-      const list = await r.json()
-      if (!Array.isArray(list)) { console.warn('TWSE API not array:', typeof list); return null }
-      const found = list.find(item => (item[codeField] || '').trim() === sym)
-      return found ? (found[nameField] || '').trim() || null : null
-    } catch(e) {
-      console.warn('TWSE fetch error:', e.message)
-      return null
-    }
-  }
-
-  // 1. 上市 TWSE
-  let name = await tryJSON(
-    'https://openapi.twse.com.tw/v1/opendata/t187ap03_L',
-    '公司代號', '公司簡稱'
-  )
-  // 2. 上櫃 TPEx
-  if (!name) name = await tryJSON(
-    'https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap03_O',
-    '公司代號', '公司簡稱'
-  )
-
-  console.log(`TWSE lookup [${sym}]:`, name || 'not found')
-  if (name) NAME_CACHE[cacheKey] = { name, ts: Date.now() }
-  return name
-}
-
-// ── Serverless /api/quote（現價 + 美股名稱）──────────────
 async function fetchFromServerless(yahooSymbols) {
   try {
-    const url = `/api/quote?symbols=${encodeURIComponent(yahooSymbols.join(','))}`
-    console.log('Calling serverless:', url)
-    const res = await fetch(url, { signal: AbortSignal.timeout(12000) })
-    if (!res.ok) { console.warn('serverless HTTP error:', res.status); return [] }
+    const res = await fetch(
+      `/api/quote?symbols=${encodeURIComponent(yahooSymbols.join(','))}`,
+      { signal: AbortSignal.timeout(12000) }
+    )
+    if (!res.ok) return []
     const data = await res.json()
-    console.log('Serverless response:', data)
     return data.quotes || []
   } catch (e) {
-    console.warn('serverless fetch failed:', e.message)
+    console.warn('serverless quote failed:', e.message)
     return []
   }
 }
 
 // ── 批次取得多檔現價 ──────────────────────────────────────
+// holdings: [{ symbol, market, asset_type }]
+// 回傳 Map<"market:symbol", price>
 export async function fetchQuotes(holdings) {
   const now = Date.now()
   const prices = {}
@@ -109,31 +69,37 @@ export async function fetchQuotes(holdings) {
   return prices
 }
 
-// ── 單一標的查詢（新增持倉時自動帶入名稱）──────────────────
+// ── 單一標的查詢（新增持倉時自動帶入名稱 + 現價）──────────
+// 回傳 { name, price } 或 null
 export async function lookupSymbol(symbol, market) {
   if (!symbol || !market) return null
+  if (!['TW', 'US', 'JP'].includes(market)) return null
+
   const sym = symbol.trim().toUpperCase()
+  const ySym = yahooSymbol(sym, market)
 
-  if (market === 'TW') {
-    // 台股：TWSE 查名稱 + serverless 查現價，同時發出
-    const [twseName, serverlessResults] = await Promise.all([
-      fetchTWSEName(sym),
-      fetchFromServerless([yahooSymbol(sym, 'TW')])
-    ])
-    const r = serverlessResults[0]
-    const name = twseName || r?.name || null
-    const price = r?.price ?? null
-    console.log(`lookupSymbol TW [${sym}]: name=${name}, price=${price}`)
-    if (name || price) return { name: name || sym, price: price || 0 }
-    return null
+  // 先查快取
+  const nameKey = `${market}:${sym}`
+  const cachedName = NAME_CACHE[nameKey]
+  const cachedPrice = PRICE_CACHE[nameKey]
+  if (
+    cachedName && Date.now() - cachedName.ts < NAME_TTL &&
+    cachedPrice && Date.now() - cachedPrice.ts < PRICE_TTL
+  ) {
+    return { name: cachedName.name, price: cachedPrice.price }
   }
 
-  if (['US', 'JP'].includes(market)) {
-    const results = await fetchFromServerless([yahooSymbol(sym, market)])
-    const r = results[0]
-    if (r?.name || r?.price) return { name: r.name || sym, price: r.price || 0 }
-    return null
-  }
+  const results = await fetchFromServerless([ySym])
+  const r = results[0]
 
+  if (!r) return null
+
+  const name = r.name || null
+  const price = r.price ?? null
+
+  if (name) NAME_CACHE[nameKey] = { name, ts: Date.now() }
+  if (price) PRICE_CACHE[nameKey] = { price, ts: Date.now() }
+
+  if (name || price) return { name: name || sym, price: price || 0 }
   return null
 }
