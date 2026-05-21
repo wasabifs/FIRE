@@ -1,13 +1,12 @@
 /**
  * 股價與標的名稱查詢
- * 全部走 /api/quote serverless（server 端無 CORS 限制）
- * 台股名稱由 server 端打 TWSE OpenAPI 取得中文名
+ * 全部走 /api/quote serverless
  */
 
 const PRICE_CACHE = {}
 const NAME_CACHE  = {}
-const PRICE_TTL = 60 * 1000       // 1 分鐘
-const NAME_TTL  = 60 * 60 * 1000  // 1 小時
+const PRICE_TTL = 60 * 1000
+const NAME_TTL  = 60 * 60 * 1000
 
 function yahooSymbol(symbol, market) {
   if (market === 'TW') return `${symbol}.TW`
@@ -24,15 +23,11 @@ async function fetchFromServerless(yahooSymbols) {
     if (!res.ok) return []
     const data = await res.json()
     return data.quotes || []
-  } catch (e) {
-    console.warn('serverless quote failed:', e.message)
+  } catch {
     return []
   }
 }
 
-// ── 批次取得多檔現價 ──────────────────────────────────────
-// holdings: [{ symbol, market, asset_type }]
-// 回傳 Map<"market:symbol", price>
 export async function fetchQuotes(holdings) {
   const now = Date.now()
   const prices = {}
@@ -69,8 +64,6 @@ export async function fetchQuotes(holdings) {
   return prices
 }
 
-// ── 單一標的查詢（新增持倉時自動帶入名稱 + 現價）──────────
-// 回傳 { name, price } 或 null
 export async function lookupSymbol(symbol, market) {
   if (!symbol || !market) return null
   if (!['TW', 'US', 'JP'].includes(market)) return null
@@ -78,7 +71,6 @@ export async function lookupSymbol(symbol, market) {
   const sym = symbol.trim().toUpperCase()
   const ySym = yahooSymbol(sym, market)
 
-  // 先查快取
   const nameKey = `${market}:${sym}`
   const cachedName = NAME_CACHE[nameKey]
   const cachedPrice = PRICE_CACHE[nameKey]
@@ -91,15 +83,11 @@ export async function lookupSymbol(symbol, market) {
 
   const results = await fetchFromServerless([ySym])
   const r = results[0]
-
   if (!r) return null
 
-  const name = r.name || null
-  const price = r.price ?? null
+  if (r.name) NAME_CACHE[nameKey] = { name: r.name, ts: Date.now() }
+  if (r.price) PRICE_CACHE[nameKey] = { price: r.price, ts: Date.now() }
 
-  if (name) NAME_CACHE[nameKey] = { name, ts: Date.now() }
-  if (price) PRICE_CACHE[nameKey] = { price, ts: Date.now() }
-
-  if (name || price) return { name: name || sym, price: price || 0 }
+  if (r.name || r.price) return { name: r.name || sym, price: r.price || 0 }
   return null
 }
