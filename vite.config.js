@@ -21,6 +21,17 @@ export default defineConfig({
           { src: 'pwa-192x192.png', sizes: '192x192', type: 'image/png' },
           { src: 'pwa-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' }
         ]
+      },
+      workbox: {
+        // 讓 /api/* 完全不被 Service Worker 攔截
+        navigateFallbackDenylist: [/^\/api\//],
+        runtimeCaching: [
+          {
+            // 明確排除 /api/* 不快取
+            urlPattern: /^\/api\//,
+            handler: 'NetworkOnly',
+          }
+        ]
       }
     })
   ]
