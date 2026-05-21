@@ -94,35 +94,42 @@ function AddHoldingModal({ accounts, onClose, onSaved }) {
   }
 
   return (
-    <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.75)', zIndex:200, display:'flex', alignItems:'center', justifyContent:'center', padding:'0 16px' }}
+    <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.75)', zIndex:200,
+      display:'flex', alignItems:'flex-end', justifyContent:'center' }}
       onClick={e=>e.target===e.currentTarget&&onClose()}>
-      <div style={{ width:'100%', maxWidth:400, background:'var(--bg-surface)', borderRadius:'var(--radius-xl)', padding:'24px 20px 28px', border:'1px solid var(--border)', maxHeight:'92vh', overflowY:'auto' }}>
-        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:20 }}>
+      <div style={{ width:'100%', maxWidth:480, background:'var(--bg-surface)',
+        borderRadius:'24px 24px 0 0', border:'1px solid var(--border)',
+        height:'88vh', display:'flex', flexDirection:'column', overflow:'hidden' }}>
+        <div style={{ padding:'20px 20px 14px', borderBottom:'1px solid var(--border)', flexShrink:0,
+          display:'flex', alignItems:'center', justifyContent:'space-between' }}>
           <h2 style={{ fontSize:18, fontWeight:600 }}>新增持倉</h2>
           <button className="btn btn-icon" onClick={onClose}><X size={16}/></button>
         </div>
-        <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
+        <div style={{ overflowY:'scroll', WebkitOverflowScrolling:'touch',
+          flex:'1 1 0', minHeight:0, padding:'16px 20px',
+          paddingBottom:'calc(24px + env(safe-area-inset-bottom, 0px))' }}>
+          <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
           <div>
-            <p className="label" style={{ marginBottom:6 }}>資產類型</p>
+            <p className="label" style={{ marginBottom:5 }}>資產類型</p>
             <select className="input" value={form.asset_type} onChange={e=>set('asset_type',e.target.value)}>
               {ASSET_TYPES.map(({value,label})=><option key={value} value={value}>{label}</option>)}
             </select>
           </div>
           <div>
-            <p className="label" style={{ marginBottom:6 }}>帳戶</p>
+            <p className="label" style={{ marginBottom:5 }}>帳戶</p>
             <select className="input" value={form.account_id} onChange={e=>set('account_id',e.target.value)}>
               {accounts.map(a=><option key={a.id} value={a.id}>{a.name}{a.type?` · ${ACCOUNT_TYPE_LABELS[a.type]||a.type}`:''}</option>)}
             </select>
           </div>
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
             <div>
-              <p className="label" style={{ marginBottom:6 }}>市場</p>
+              <p className="label" style={{ marginBottom:5 }}>市場</p>
               <select className="input" value={form.market} onChange={e=>{ set('market',e.target.value); trigger(form.symbol, e.target.value) }}>
                 {['TW','US','JP','CRYPTO','FUND'].map(m=><option key={m} value={m}>{MARKET_LABELS[m]}</option>)}
               </select>
             </div>
             <div>
-              <p className="label" style={{ marginBottom:6 }}>代號 <span style={{ color:'var(--accent-blue)' }}>*</span></p>
+              <p className="label" style={{ marginBottom:5 }}>代號 <span style={{ color:'var(--accent-blue)' }}>*</span></p>
               <div style={{ position:'relative' }}>
                 <input className="input" placeholder="例：0050" value={form.symbol}
                   onChange={e=>{ set('symbol',e.target.value); trigger(e.target.value, form.market) }}
@@ -134,7 +141,7 @@ function AddHoldingModal({ accounts, onClose, onSaved }) {
             </div>
           </div>
           <div>
-            <p className="label" style={{ marginBottom:6 }}>
+            <p className="label" style={{ marginBottom:5 }}>
               名稱
               {looking && <span style={{ color:'var(--accent-blue)', marginLeft:6, fontSize:10 }}>查詢中...</span>}
               {!looking && form.name && <span style={{ color:'var(--profit)', marginLeft:6, fontSize:10 }}>✓ 已自動帶入</span>}
@@ -144,11 +151,11 @@ function AddHoldingModal({ accounts, onClose, onSaved }) {
           </div>
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
             <div>
-              <p className="label" style={{ marginBottom:6 }}>股數 <span style={{ color:'var(--accent-blue)' }}>*</span></p>
+              <p className="label" style={{ marginBottom:5 }}>股數 <span style={{ color:'var(--accent-blue)' }}>*</span></p>
               <input className="input" type="number" placeholder="0" step="0.00001" value={form.quantity} onChange={e=>set('quantity',e.target.value)} />
             </div>
             <div>
-              <p className="label" style={{ marginBottom:6 }}>總成本 <span style={{ color:'var(--accent-blue)' }}>*</span></p>
+              <p className="label" style={{ marginBottom:5 }}>總成本 <span style={{ color:'var(--accent-blue)' }}>*</span></p>
               <input className="input" type="number" placeholder="0" value={form.total_cost} onChange={e=>set('total_cost',e.target.value)} />
             </div>
           </div>
@@ -162,6 +169,7 @@ function AddHoldingModal({ accounts, onClose, onSaved }) {
             onClick={save} disabled={saving||!form.symbol||!form.quantity||!form.total_cost}>
             {saving?'儲存中...':'新增持倉'}
           </button>
+        </div>
         </div>
       </div>
     </div>
@@ -321,15 +329,19 @@ function TransactionModal({ accounts, transaction, onClose, onSaved }) {
   }
 
   return (
-    <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.75)', zIndex:200, display:'flex', alignItems:'center', justifyContent:'center', padding:'0 16px' }}
+    <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.75)', zIndex:200,
+      display:'flex', alignItems:'flex-end', justifyContent:'center' }}
       onClick={e=>e.target===e.currentTarget&&onClose()}>
-      <div style={{ width:'100%', maxWidth:400, background:'var(--bg-surface)', borderRadius:'var(--radius-xl)', padding:'24px 20px 28px', border:'1px solid var(--border)', maxHeight:'92vh', overflowY:'auto' }}>
-        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:20 }}>
-          <h2 style={{ fontSize:18, fontWeight:600 }}>{isEdit ? '編輯交易' : '新增交易'}</h2>
-          <button className="btn btn-icon" onClick={onClose}><X size={16}/></button>
-        </div>
-        <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
-          {/* 買入/賣出 */}
+      <div style={{ width:'100%', maxWidth:480, background:'var(--bg-surface)',
+        borderRadius:'24px 24px 0 0', border:'1px solid var(--border)',
+        height:'88vh', display:'flex', flexDirection:'column', overflow:'hidden' }}>
+
+        {/* 固定標題 */}
+        <div style={{ padding:'20px 20px 14px', borderBottom:'1px solid var(--border)', flexShrink:0 }}>
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:14 }}>
+            <h2 style={{ fontSize:18, fontWeight:600 }}>{isEdit ? '編輯交易' : '新增交易'}</h2>
+            <button className="btn btn-icon" onClick={onClose}><X size={16}/></button>
+          </div>
           <div style={{ display:'flex', background:'var(--bg-input)', borderRadius:10, padding:3 }}>
             {['buy','sell'].map(t=>(
               <button key={t} onClick={()=>set('type',t)} style={{
@@ -339,81 +351,91 @@ function TransactionModal({ accounts, transaction, onClose, onSaved }) {
               }}>{t==='buy'?'買入':'賣出'}</button>
             ))}
           </div>
-          {/* 資產類型 */}
-          <div>
-            <p className="label" style={{ marginBottom:6 }}>帳戶</p>
-            <select className="input" value={form.account_id} onChange={e=>set('account_id',e.target.value)}>
-              {accounts.map(a=><option key={a.id} value={a.id}>{a.name}{a.type?` · ${ACCOUNT_TYPE_LABELS[a.type]||a.type}`:''}</option>)}
-            </select>
-          </div>
-          {/* 市場 + 代號 */}
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+        </div>
+
+        {/* 可滾動內容 */}
+        <div style={{ overflowY:'scroll', WebkitOverflowScrolling:'touch',
+          flex:'1 1 0', minHeight:0, padding:'16px 20px',
+          paddingBottom:'calc(24px + env(safe-area-inset-bottom, 0px))' }}>
+          <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
+
             <div>
-              <p className="label" style={{ marginBottom:6 }}>市場</p>
-              <select className="input" value={form.market} onChange={e=>{ set('market',e.target.value); trigger(form.symbol, e.target.value) }}>
-                {['TW','US','JP','CRYPTO','FUND'].map(m=><option key={m} value={m}>{MARKET_LABELS[m]}</option>)}
+              <p className="label" style={{ marginBottom:5 }}>帳戶</p>
+              <select className="input" value={form.account_id} onChange={e=>set('account_id',e.target.value)}>
+                {accounts.map(a=><option key={a.id} value={a.id}>{a.name}{a.type?` · ${ACCOUNT_TYPE_LABELS[a.type]||a.type}`:''}</option>)}
               </select>
             </div>
-            <div>
-              <p className="label" style={{ marginBottom:6 }}>代號 <span style={{ color:'var(--accent-blue)' }}>*</span></p>
-              <div style={{ position:'relative' }}>
-                <input className="input" placeholder="例：0050" value={form.symbol}
-                  onChange={e=>{ set('symbol',e.target.value); trigger(e.target.value, form.market) }}
-                  style={{ paddingRight: looking ? 36 : 14 }} autoFocus={!isEdit} />
-                {looking && <div style={{ position:'absolute', right:10, top:'50%', transform:'translateY(-50%)' }}>
-                  <RefreshCw size={14} color="var(--accent-blue)" style={{ animation:'spin 1s linear infinite' }}/>
-                </div>}
+
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+              <div>
+                <p className="label" style={{ marginBottom:5 }}>市場</p>
+                <select className="input" value={form.market} onChange={e=>{ set('market',e.target.value); trigger(form.symbol, e.target.value) }}>
+                  {['TW','US','JP','CRYPTO','FUND'].map(m=><option key={m} value={m}>{MARKET_LABELS[m]}</option>)}
+                </select>
+              </div>
+              <div>
+                <p className="label" style={{ marginBottom:5 }}>代號 <span style={{ color:'var(--accent-blue)' }}>*</span></p>
+                <div style={{ position:'relative' }}>
+                  <input className="input" placeholder="例：0050" value={form.symbol}
+                    onChange={e=>{ set('symbol',e.target.value); trigger(e.target.value, form.market) }}
+                    style={{ paddingRight: looking ? 36 : 14 }} autoFocus={!isEdit} />
+                  {looking && <div style={{ position:'absolute', right:10, top:'50%', transform:'translateY(-50%)' }}>
+                    <RefreshCw size={14} color="var(--accent-blue)" style={{ animation:'spin 1s linear infinite' }}/>
+                  </div>}
+                </div>
               </div>
             </div>
-          </div>
-          {/* 名稱 */}
-          <div>
-            <p className="label" style={{ marginBottom:6 }}>
-              名稱
-              {looking && <span style={{ color:'var(--accent-blue)', marginLeft:6, fontSize:10 }}>查詢中...</span>}
-              {!looking && form.name && <span style={{ color:'var(--profit)', marginLeft:6, fontSize:10 }}>✓ 已帶入</span>}
-            </p>
-            <input className="input" placeholder="例：元大台灣50" value={form.name} onChange={e=>set('name',e.target.value)} />
-            {error && <p style={{ fontSize:11, color:'var(--accent-amber)', marginTop:4 }}>{error}</p>}
-          </div>
-          {/* 股數 + 總成本 */}
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+
             <div>
-              <p className="label" style={{ marginBottom:6 }}>股數 <span style={{ color:'var(--accent-blue)' }}>*</span></p>
-              <input className="input" type="number" placeholder="0" step="0.00001" value={form.quantity} onChange={e=>set('quantity',e.target.value)} />
+              <p className="label" style={{ marginBottom:5 }}>
+                名稱
+                {looking && <span style={{ color:'var(--accent-blue)', marginLeft:6, fontSize:10 }}>查詢中...</span>}
+                {!looking && form.name && <span style={{ color:'var(--profit)', marginLeft:6, fontSize:10 }}>✓ 已帶入</span>}
+              </p>
+              <input className="input" placeholder="例：元大台灣50" value={form.name} onChange={e=>set('name',e.target.value)} />
+              {error && <p style={{ fontSize:11, color:'var(--accent-amber)', marginTop:4 }}>{error}</p>}
             </div>
+
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+              <div>
+                <p className="label" style={{ marginBottom:5 }}>股數 <span style={{ color:'var(--accent-blue)' }}>*</span></p>
+                <input className="input" type="number" placeholder="0" step="0.00001" value={form.quantity} onChange={e=>set('quantity',e.target.value)} />
+              </div>
+              <div>
+                <p className="label" style={{ marginBottom:5 }}>總成本 <span style={{ color:'var(--accent-blue)' }}>*</span></p>
+                <input className="input" type="number" placeholder="0" value={form.total_cost} onChange={e=>set('total_cost',e.target.value)} />
+              </div>
+            </div>
+
+            <div style={{ background:'var(--bg-input)', borderRadius:'var(--radius-md)', padding:'10px 14px', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+              <span style={{ fontSize:13, color:'var(--text-secondary)' }}>單位價格（自動計算）</span>
+              <span className="text-mono" style={{ fontSize:13, fontWeight:600, color:unitPrice?'var(--text-primary)':'var(--text-muted)' }}>
+                {unitPrice ? formatNTD(unitPrice.toFixed(4)) : '—'}
+              </span>
+            </div>
+
             <div>
-              <p className="label" style={{ marginBottom:6 }}>總成本 <span style={{ color:'var(--accent-blue)' }}>*</span></p>
-              <input className="input" type="number" placeholder="0" value={form.total_cost} onChange={e=>set('total_cost',e.target.value)} />
+              <p className="label" style={{ marginBottom:5 }}>交易日期</p>
+              <input className="input" type="text" placeholder="YYYY-MM-DD"
+                value={form.trade_date} onChange={e=>set('trade_date',e.target.value)} />
             </div>
+
+            <div>
+              <p className="label" style={{ marginBottom:5 }}>備註（選填）</p>
+              <input className="input" placeholder="交易原因" value={form.note} onChange={e=>set('note',e.target.value)} />
+            </div>
+
+            {!isEdit && form.type==='buy' && (
+              <p style={{ fontSize:11, color:'var(--text-muted)', textAlign:'center' }}>
+                買入交易將自動同步至持倉（相同代號自動合併）
+              </p>
+            )}
+
+            <button className="btn btn-primary" style={{ width:'100%', marginTop:4 }}
+              onClick={save} disabled={saving||!form.symbol||!form.quantity||!form.total_cost}>
+              {saving?'儲存中...':isEdit?'儲存變更':'新增交易'}
+            </button>
           </div>
-          {/* 單位價格（自動計算） */}
-          <div style={{ background:'var(--bg-input)', borderRadius:'var(--radius-md)', padding:'10px 14px', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-            <span style={{ fontSize:13, color:'var(--text-secondary)' }}>單位價格（自動計算）</span>
-            <span className="text-mono" style={{ fontSize:13, fontWeight:600, color:unitPrice?'var(--text-primary)':'var(--text-muted)' }}>
-              {unitPrice ? formatNTD(unitPrice.toFixed(4)) : '—'}
-            </span>
-          </div>
-          {/* 日期 */}
-          <div>
-            <p className="label" style={{ marginBottom:6 }}>交易日期</p>
-            <input className="input" type="date" value={form.trade_date} onChange={e=>set('trade_date',e.target.value)} />
-          </div>
-          {/* 備註 */}
-          <div>
-            <p className="label" style={{ marginBottom:6 }}>備註（選填）</p>
-            <input className="input" placeholder="交易原因" value={form.note} onChange={e=>set('note',e.target.value)} />
-          </div>
-          {/* 買入時顯示提示 */}
-          {!isEdit && form.type==='buy' && (
-            <p style={{ fontSize:11, color:'var(--text-muted)', textAlign:'center' }}>
-              買入交易將自動同步至持倉（相同代號自動合併）
-            </p>
-          )}
-          <button className="btn btn-primary" style={{ width:'100%', marginTop:4 }}
-            onClick={save} disabled={saving||!form.symbol||!form.quantity||!form.total_cost}>
-            {saving?'儲存中...':isEdit?'儲存變更':'新增交易'}
-          </button>
         </div>
       </div>
     </div>
@@ -476,32 +498,34 @@ function AddPnlModal({ accounts, onClose, onSaved }) {
       if (sellQty > 0 && sell.symbol.trim()) {
         const sym = sell.symbol.trim().toUpperCase()
 
-        // 先取得當前 user 確保 RLS context 正確
-        const { data: { user } } = await supabase.auth.getUser()
-
-        const { data: existing, error: qErr } = await supabase
+        // 先用帳戶+代號查，找不到再用純代號查（防止帳戶選錯）
+        let { data: existing, error: qErr } = await supabase
           .from('holdings')
-          .select('id, quantity, avg_cost')
+          .select('id, quantity, avg_cost, account_id')
           .eq('account_id', sell.account_id)
           .eq('symbol', sym)
           .maybeSingle()
 
-        console.log('holdings query:', { sym, account_id: sell.account_id, existing, qErr })
+        // 如果帳戶+代號找不到，嘗試只用代號找（跨帳戶 fallback）
+        if (!existing && !qErr) {
+          const { data: fallback } = await supabase
+            .from('holdings')
+            .select('id, quantity, avg_cost, account_id')
+            .eq('symbol', sym)
+            .maybeSingle()
+          existing = fallback
+        }
 
         if (existing) {
           const remainQty = Number(existing.quantity) - sellQty
-          if (remainQty <= 0) {
-            const { error: delErr } = await supabase.from('holdings').delete().eq('id', existing.id)
-            console.log('delete result:', delErr)
+          if (remainQty <= 0.00001) {
+            await supabase.from('holdings').delete().eq('id', existing.id)
           } else {
-            const { error: updErr } = await supabase.from('holdings').update({
+            await supabase.from('holdings').update({
               quantity: remainQty,
-              avg_cost: Number(existing.avg_cost), // 均價不變
+              avg_cost: Number(existing.avg_cost),
             }).eq('id', existing.id)
-            console.log('update result:', updErr, 'remainQty:', remainQty)
           }
-        } else {
-          console.warn('holding not found for', sym, 'in account', sell.account_id)
         }
       }
 
@@ -717,6 +741,7 @@ function HoldingsTab({ accounts, refreshTick, onRefreshDone, usdRate }) {
   const [marketFilter, setMarketFilter] = useState('全部')
   const [accountFilter, setAccountFilter] = useState('全部')
   const [sortBy, setSortBy] = useState('市值')
+  const [searchQuery, setSearchQuery] = useState('')
   const [prices, setPrices] = useState({})
   const [quoteStatus, setQuoteStatus] = useState('idle')
   const [editHolding, setEditHolding] = useState(null)
@@ -759,6 +784,12 @@ function HoldingsTab({ accounts, refreshTick, onRefreshDone, usdRate }) {
   let filtered = allHoldings
   if (marketFilter !== '全部') filtered = filtered.filter(h => h.market === marketFilter)
   if (accountFilter !== '全部') filtered = filtered.filter(h => h.accountId === accountFilter)
+  if (searchQuery.trim()) {
+    const q = searchQuery.trim().toLowerCase()
+    filtered = filtered.filter(h =>
+      h.symbol.toLowerCase().includes(q) || (h.name||'').toLowerCase().includes(q)
+    )
+  }
 
   filtered = filtered.map(h => {
     const price = getPrice(h)
@@ -817,6 +848,26 @@ function HoldingsTab({ accounts, refreshTick, onRefreshDone, usdRate }) {
           {accountOptions.map(a => chip(accountFilter===a.id, a.name, ()=>setAccountFilter(a.id)))}
         </div>
       )}
+      {/* 搜尋框 */}
+      <div style={{ position:'relative', marginBottom:10 }}>
+        <input
+          className="input"
+          placeholder="搜尋代號或名稱…"
+          value={searchQuery}
+          onChange={e => setSearchQuery(e.target.value)}
+          style={{ paddingLeft:36, fontSize:14, height:38 }}
+        />
+        <svg style={{ position:'absolute', left:12, top:'50%', transform:'translateY(-50%)', opacity:0.4 }}
+          width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+        </svg>
+        {searchQuery && (
+          <button onClick={() => setSearchQuery('')} style={{
+            position:'absolute', right:10, top:'50%', transform:'translateY(-50%)',
+            background:'none', border:'none', cursor:'pointer', color:'var(--text-muted)', fontSize:16, lineHeight:1,
+          }}>×</button>
+        )}
+      </div>
       <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:12 }}>
         <span style={{ fontSize:11, color:'var(--text-muted)', flexShrink:0 }}>排序</span>
         {SORT_OPTIONS.map(s=>(
@@ -1031,6 +1082,12 @@ function PnlTab({ accounts, onHoldingChanged }) {
     setLoading(false)
   }
 
+  async function deletePnl(r) {
+    if (!confirm(`確定刪除此${TYPE_LABELS[r.type]||''}紀錄？`)) return
+    await supabase.from('pnl_records').delete().eq('id', r.id)
+    load()
+  }
+
   const filtered = pnlView==='all' ? records
     : pnlView==='dividend' ? records.filter(r=>r.type==='dividend'||r.type==='interest')
     : records.filter(r=>r.type==='sell_profit')
@@ -1110,6 +1167,9 @@ function PnlTab({ accounts, onHoldingChanged }) {
                         </p>
                       )}
                     </div>
+                    <button onClick={()=>deletePnl(r)} style={{ flexShrink:0, width:26, height:26, borderRadius:6, background:'rgba(239,68,68,0.08)', border:'1px solid rgba(239,68,68,0.2)', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', color:'var(--loss)' }}>
+                      <Trash2 size={11}/>
+                    </button>
                   </div>
                 )
               })}
