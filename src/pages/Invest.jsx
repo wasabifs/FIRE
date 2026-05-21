@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Plus, RefreshCw, X, ArrowUpRight, ArrowDownRight, DollarSign, Edit2 } from 'lucide-react'
+import { Plus, RefreshCw, X, ArrowUpRight, ArrowDownRight, DollarSign, Edit2, Trash2 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { formatNTD, formatPct, formatPctColor, formatDate } from '../lib/format'
 import { fetchQuotes, lookupSymbol } from '../lib/quote'
@@ -9,12 +9,10 @@ const TABS = ['持倉', '交易', '損益']
 const MARKETS = ['全部', 'TW', 'US', 'JP', 'CRYPTO', 'FUND']
 const MARKET_LABELS = { 全部:'全部', TW:'台股', US:'美股', JP:'日股', CRYPTO:'加密', FUND:'基金' }
 const SORT_OPTIONS = ['市值', '損益', '報酬率', '代號']
-
 const ACCOUNT_TYPE_LABELS = {
   brokerage:'證券帳戶', bank:'銀行帳戶', fund:'基金帳戶',
   insurance:'保單', real_estate:'不動產', crypto:'加密貨幣', debt:'負債',
 }
-
 const ASSET_TYPES = [
   { value:'stock', label:'股票' }, { value:'etf', label:'ETF' },
   { value:'fund', label:'基金' }, { value:'crypto', label:'加密幣' },
@@ -36,6 +34,28 @@ function TabBar({ tabs, active, onChange }) {
   )
 }
 
+// ── 共用：代號自動查詢 hook ─────────────────────────────────
+function useSymbolLookup(symbol, market, onResult) {
+  const timer = useRef(null)
+  const [looking, setLooking] = useState(false)
+  const [error, setError] = useState('')
+
+  function trigger(sym, mkt) {
+    setError('')
+    clearTimeout(timer.current)
+    if (!sym.trim() || !['TW','US','JP'].includes(mkt)) return
+    timer.current = setTimeout(async () => {
+      setLooking(true)
+      const result = await lookupSymbol(sym.trim(), mkt)
+      setLooking(false)
+      if (result) { setError(''); onResult(result) }
+      else if (sym.trim().length >= 2) setError('查無此代號，可手動填入名稱')
+    }, 800)
+  }
+
+  return { looking, error, trigger }
+}
+
 // ── 新增持倉 Modal ──────────────────────────────────────────
 function AddHoldingModal({ accounts, onClose, onSaved }) {
   const [form, setForm] = useState({
@@ -43,39 +63,9 @@ function AddHoldingModal({ accounts, onClose, onSaved }) {
     symbol:'', name:'', market:'TW', quantity:'', total_cost:'',
   })
   const [saving, setSaving] = useState(false)
-  const [lookingUp, setLookingUp] = useState(false)
-  const [lookupError, setLookupError] = useState('')
-  const symbolTimer = useRef(null)
   const set = (k,v) => setForm(f=>({...f,[k]:v}))
 
-  function handleSymbolChange(val) {
-    set('symbol', val)
-    setLookupError('')
-    clearTimeout(symbolTimer.current)
-    const trimmed = val.trim()
-    if (!trimmed || !['TW','US','JP'].includes(form.market)) return
-    symbolTimer.current = setTimeout(async () => {
-      setLookingUp(true)
-      const result = await lookupSymbol(trimmed, form.market)
-      setLookingUp(false)
-      if (result) { set('name', result.name) }
-      else if (trimmed.length >= 2) setLookupError('查無此代號，可手動填入名稱')
-    }, 800)
-  }
-
-  function handleMarketChange(market) {
-    set('market', market)
-    setLookupError('')
-    clearTimeout(symbolTimer.current)
-    const trimmed = form.symbol.trim()
-    if (!trimmed || !['TW','US','JP'].includes(market)) return
-    symbolTimer.current = setTimeout(async () => {
-      setLookingUp(true)
-      const result = await lookupSymbol(trimmed, market)
-      setLookingUp(false)
-      if (result) set('name', result.name)
-    }, 400)
-  }
+  const { looking, error, trigger } = useSymbolLookup(form.symbol, form.market, r => set('name', r.name))
 
   const avgCost = (form.quantity && form.total_cost && Number(form.quantity) > 0)
     ? Number(form.total_cost) / Number(form.quantity) : null
@@ -117,7 +107,7 @@ function AddHoldingModal({ accounts, onClose, onSaved }) {
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
             <div>
               <p className="label" style={{ marginBottom:6 }}>市場</p>
-              <select className="input" value={form.market} onChange={e=>handleMarketChange(e.target.value)}>
+              <select className="input" value={form.market} onChange={e=>{ set('market',e.target.value); trigger(form.symbol, e.target.value) }}>
                 {['TW','US','JP','CRYPTO','FUND'].map(m=><option key={m} value={m}>{MARKET_LABELS[m]}</option>)}
               </select>
             </div>
@@ -125,35 +115,31 @@ function AddHoldingModal({ accounts, onClose, onSaved }) {
               <p className="label" style={{ marginBottom:6 }}>代號 <span style={{ color:'var(--accent-blue)' }}>*</span></p>
               <div style={{ position:'relative' }}>
                 <input className="input" placeholder="例：0050" value={form.symbol}
-                  onChange={e=>handleSymbolChange(e.target.value)}
-                  style={{ paddingRight: lookingUp ? 36 : 14 }} autoFocus />
-                {lookingUp && (
-                  <div style={{ position:'absolute', right:10, top:'50%', transform:'translateY(-50%)' }}>
-                    <RefreshCw size={14} color="var(--accent-blue)" style={{ animation:'spin 1s linear infinite' }}/>
-                  </div>
-                )}
+                  onChange={e=>{ set('symbol',e.target.value); trigger(e.target.value, form.market) }}
+                  style={{ paddingRight: looking ? 36 : 14 }} autoFocus />
+                {looking && <div style={{ position:'absolute', right:10, top:'50%', transform:'translateY(-50%)' }}>
+                  <RefreshCw size={14} color="var(--accent-blue)" style={{ animation:'spin 1s linear infinite' }}/>
+                </div>}
               </div>
             </div>
           </div>
           <div>
             <p className="label" style={{ marginBottom:6 }}>
               名稱
-              {lookingUp && <span style={{ color:'var(--accent-blue)', marginLeft:6, fontSize:10 }}>查詢中...</span>}
-              {!lookingUp && form.name && <span style={{ color:'var(--profit)', marginLeft:6, fontSize:10 }}>✓ 已自動帶入</span>}
+              {looking && <span style={{ color:'var(--accent-blue)', marginLeft:6, fontSize:10 }}>查詢中...</span>}
+              {!looking && form.name && <span style={{ color:'var(--profit)', marginLeft:6, fontSize:10 }}>✓ 已自動帶入</span>}
             </p>
             <input className="input" placeholder="例：元大台灣50" value={form.name} onChange={e=>set('name',e.target.value)} />
-            {lookupError && <p style={{ fontSize:11, color:'var(--accent-amber)', marginTop:4 }}>{lookupError}</p>}
+            {error && <p style={{ fontSize:11, color:'var(--accent-amber)', marginTop:4 }}>{error}</p>}
           </div>
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
             <div>
               <p className="label" style={{ marginBottom:6 }}>股數 <span style={{ color:'var(--accent-blue)' }}>*</span></p>
-              <input className="input" type="number" placeholder="0" step="0.00001"
-                value={form.quantity} onChange={e=>set('quantity',e.target.value)} />
+              <input className="input" type="number" placeholder="0" step="0.00001" value={form.quantity} onChange={e=>set('quantity',e.target.value)} />
             </div>
             <div>
               <p className="label" style={{ marginBottom:6 }}>總成本 <span style={{ color:'var(--accent-blue)' }}>*</span></p>
-              <input className="input" type="number" placeholder="0"
-                value={form.total_cost} onChange={e=>set('total_cost',e.target.value)} />
+              <input className="input" type="number" placeholder="0" value={form.total_cost} onChange={e=>set('total_cost',e.target.value)} />
             </div>
           </div>
           <div style={{ background:'var(--bg-input)', borderRadius:'var(--radius-md)', padding:'10px 14px', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
@@ -172,21 +158,24 @@ function AddHoldingModal({ accounts, onClose, onSaved }) {
   )
 }
 
-// ── 編輯持倉 Modal ──────────────────────────────────────────
+// ── 編輯持倉 Modal（股數＋總成本，自動算均價）──────────────
 function EditHoldingModal({ holding, onClose, onSaved }) {
   const [form, setForm] = useState({
     quantity: String(holding.quantity),
-    avg_cost: String(holding.avg_cost),
+    total_cost: String((Number(holding.quantity) * Number(holding.avg_cost)).toFixed(2)),
   })
   const [saving, setSaving] = useState(false)
   const set = (k,v) => setForm(f=>({...f,[k]:v}))
 
+  const avgCost = (form.quantity && form.total_cost && Number(form.quantity) > 0)
+    ? Number(form.total_cost) / Number(form.quantity) : null
+
   async function save() {
-    if (!form.quantity || !form.avg_cost) return
+    if (!form.quantity || !form.total_cost) return
     setSaving(true)
     await supabase.from('holdings').update({
       quantity: Number(form.quantity),
-      avg_cost: Number(form.avg_cost),
+      avg_cost: avgCost || 0,
     }).eq('id', holding.id)
     setSaving(false); onSaved()
   }
@@ -213,25 +202,20 @@ function EditHoldingModal({ holding, onClose, onSaved }) {
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
             <div>
               <p className="label" style={{ marginBottom:6 }}>股數</p>
-              <input className="input" type="number" step="0.00001"
-                value={form.quantity} onChange={e=>set('quantity',e.target.value)} autoFocus />
+              <input className="input" type="number" step="0.00001" value={form.quantity} onChange={e=>set('quantity',e.target.value)} autoFocus />
             </div>
             <div>
-              <p className="label" style={{ marginBottom:6 }}>均價</p>
-              <input className="input" type="number" step="0.0001"
-                value={form.avg_cost} onChange={e=>set('avg_cost',e.target.value)} />
+              <p className="label" style={{ marginBottom:6 }}>總成本</p>
+              <input className="input" type="number" step="0.01" value={form.total_cost} onChange={e=>set('total_cost',e.target.value)} />
             </div>
           </div>
-          {form.quantity && form.avg_cost && (
-            <div style={{ background:'var(--bg-input)', borderRadius:'var(--radius-md)', padding:'10px 14px', display:'flex', justifyContent:'space-between' }}>
-              <span style={{ fontSize:13, color:'var(--text-secondary)' }}>總成本</span>
-              <span className="text-mono" style={{ fontSize:13, fontWeight:500 }}>
-                {formatNTD(Number(form.quantity) * Number(form.avg_cost))}
-              </span>
-            </div>
-          )}
-          <button className="btn btn-primary" style={{ width:'100%' }}
-            onClick={save} disabled={saving||!form.quantity||!form.avg_cost}>
+          <div style={{ background:'var(--bg-input)', borderRadius:'var(--radius-md)', padding:'10px 14px', display:'flex', justifyContent:'space-between' }}>
+            <span style={{ fontSize:13, color:'var(--text-secondary)' }}>均價（自動計算）</span>
+            <span className="text-mono" style={{ fontSize:13, fontWeight:600, color:avgCost?'var(--text-primary)':'var(--text-muted)' }}>
+              {avgCost ? formatNTD(avgCost.toFixed(4)) : '—'}
+            </span>
+          </div>
+          <button className="btn btn-primary" style={{ width:'100%' }} onClick={save} disabled={saving||!form.quantity||!form.total_cost}>
             {saving?'儲存中...':'儲存變更'}
           </button>
           <button onClick={remove} disabled={saving} style={{
@@ -245,40 +229,95 @@ function EditHoldingModal({ holding, onClose, onSaved }) {
   )
 }
 
-// ── 新增交易 Modal ──────────────────────────────────────────
-function AddTransactionModal({ accounts, onClose, onSaved }) {
+// ── 新增/編輯交易 Modal ──────────────────────────────────────
+function TransactionModal({ accounts, transaction, onClose, onSaved }) {
+  const isEdit = !!transaction
   const [form, setForm] = useState({
-    account_id:accounts[0]?.id||'', type:'buy', symbol:'', market:'TW',
-    quantity:'', price:'', fee:'', tax:'',
-    trade_date:new Date().toISOString().slice(0,10), note:'',
+    account_id: transaction?.account_id || accounts[0]?.id || '',
+    type: transaction?.type || 'buy',
+    symbol: transaction?.symbol || '',
+    name: transaction?.name || '',
+    market: transaction?.market || 'TW',
+    quantity: transaction ? String(transaction.quantity) : '',
+    price: transaction ? String(transaction.price) : '',
+    fee: transaction ? String(transaction.fee||0) : '',
+    tax: transaction ? String(transaction.tax||0) : '',
+    trade_date: transaction?.trade_date || new Date().toISOString().slice(0,10),
+    note: transaction?.note || '',
   })
   const [saving, setSaving] = useState(false)
   const set = (k,v) => setForm(f=>({...f,[k]:v}))
 
+  const { looking, error, trigger } = useSymbolLookup(form.symbol, form.market, r => set('name', r.name))
+
+  const total = (Number(form.quantity)*Number(form.price))+Number(form.fee||0)+Number(form.tax||0)
+
   async function save() {
     if (!form.symbol||!form.quantity||!form.price) return
     setSaving(true)
-    await supabase.from('transactions').insert({
-      account_id:form.account_id, type:form.type,
-      symbol:form.symbol.trim().toUpperCase(), market:form.market,
-      quantity:Number(form.quantity), price:Number(form.price),
-      fee:Number(form.fee)||0, tax:Number(form.tax)||0,
-      trade_date:form.trade_date, note:form.note.trim()||null,
-    })
+
+    const txData = {
+      account_id: form.account_id, type: form.type,
+      symbol: form.symbol.trim().toUpperCase(), market: form.market,
+      quantity: Number(form.quantity), price: Number(form.price),
+      fee: Number(form.fee)||0, tax: Number(form.tax)||0,
+      trade_date: form.trade_date, note: form.note.trim()||null,
+    }
+
+    if (isEdit) {
+      await supabase.from('transactions').update(txData).eq('id', transaction.id)
+    } else {
+      await supabase.from('transactions').insert(txData)
+
+      // ── 同步持倉 ──
+      if (form.type === 'buy') {
+        const sym = form.symbol.trim().toUpperCase()
+        const newQty = Number(form.quantity)
+        const newCost = newQty * Number(form.price) + Number(form.fee||0)
+
+        // 查同帳戶同代號的既有持倉
+        const { data: existing } = await supabase.from('holdings')
+          .select('*').eq('account_id', form.account_id).eq('symbol', sym).maybeSingle()
+
+        if (existing) {
+          // 合併：加總股數，重算均價
+          const totalQty  = Number(existing.quantity) + newQty
+          const totalCost = Number(existing.quantity) * Number(existing.avg_cost) + newCost
+          const newAvg    = totalCost / totalQty
+          await supabase.from('holdings').update({
+            quantity: totalQty,
+            avg_cost: newAvg,
+          }).eq('id', existing.id)
+        } else {
+          // 新增持倉
+          const avg = newCost / newQty
+          await supabase.from('holdings').insert({
+            account_id: form.account_id,
+            symbol: sym,
+            name: form.name.trim() || sym,
+            market: form.market,
+            asset_type: 'stock',
+            quantity: newQty,
+            avg_cost: avg,
+            current_price: avg,
+          })
+        }
+      }
+    }
+
     setSaving(false); onSaved()
   }
-
-  const total = (Number(form.quantity)*Number(form.price))+Number(form.fee||0)+Number(form.tax||0)
 
   return (
     <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.75)', zIndex:200, display:'flex', alignItems:'center', justifyContent:'center', padding:'0 16px' }}
       onClick={e=>e.target===e.currentTarget&&onClose()}>
       <div style={{ width:'100%', maxWidth:400, background:'var(--bg-surface)', borderRadius:'var(--radius-xl)', padding:'24px 20px 28px', border:'1px solid var(--border)', maxHeight:'92vh', overflowY:'auto' }}>
         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:20 }}>
-          <h2 style={{ fontSize:18, fontWeight:600 }}>新增交易</h2>
+          <h2 style={{ fontSize:18, fontWeight:600 }}>{isEdit ? '編輯交易' : '新增交易'}</h2>
           <button className="btn btn-icon" onClick={onClose}><X size={16}/></button>
         </div>
         <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
+          {/* 買入/賣出 */}
           <div style={{ display:'flex', background:'var(--bg-input)', borderRadius:10, padding:3 }}>
             {['buy','sell'].map(t=>(
               <button key={t} onClick={()=>set('type',t)} style={{
@@ -288,34 +327,55 @@ function AddTransactionModal({ accounts, onClose, onSaved }) {
               }}>{t==='buy'?'買入':'賣出'}</button>
             ))}
           </div>
+          {/* 資產類型 */}
           <div>
             <p className="label" style={{ marginBottom:6 }}>帳戶</p>
             <select className="input" value={form.account_id} onChange={e=>set('account_id',e.target.value)}>
-              {accounts.map(a=><option key={a.id} value={a.id}>{a.name}</option>)}
+              {accounts.map(a=><option key={a.id} value={a.id}>{a.name}{a.type?` · ${ACCOUNT_TYPE_LABELS[a.type]||a.type}`:''}</option>)}
             </select>
           </div>
+          {/* 市場 + 代號 */}
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
             <div>
-              <p className="label" style={{ marginBottom:6 }}>代號</p>
-              <input className="input" placeholder="例：0050" value={form.symbol} onChange={e=>set('symbol',e.target.value)} />
-            </div>
-            <div>
               <p className="label" style={{ marginBottom:6 }}>市場</p>
-              <select className="input" value={form.market} onChange={e=>set('market',e.target.value)}>
+              <select className="input" value={form.market} onChange={e=>{ set('market',e.target.value); trigger(form.symbol, e.target.value) }}>
                 {['TW','US','JP','CRYPTO','FUND'].map(m=><option key={m} value={m}>{MARKET_LABELS[m]}</option>)}
               </select>
             </div>
+            <div>
+              <p className="label" style={{ marginBottom:6 }}>代號 <span style={{ color:'var(--accent-blue)' }}>*</span></p>
+              <div style={{ position:'relative' }}>
+                <input className="input" placeholder="例：0050" value={form.symbol}
+                  onChange={e=>{ set('symbol',e.target.value); trigger(e.target.value, form.market) }}
+                  style={{ paddingRight: looking ? 36 : 14 }} autoFocus={!isEdit} />
+                {looking && <div style={{ position:'absolute', right:10, top:'50%', transform:'translateY(-50%)' }}>
+                  <RefreshCw size={14} color="var(--accent-blue)" style={{ animation:'spin 1s linear infinite' }}/>
+                </div>}
+              </div>
+            </div>
           </div>
+          {/* 名稱 */}
+          <div>
+            <p className="label" style={{ marginBottom:6 }}>
+              名稱
+              {looking && <span style={{ color:'var(--accent-blue)', marginLeft:6, fontSize:10 }}>查詢中...</span>}
+              {!looking && form.name && <span style={{ color:'var(--profit)', marginLeft:6, fontSize:10 }}>✓ 已帶入</span>}
+            </p>
+            <input className="input" placeholder="例：元大台灣50" value={form.name} onChange={e=>set('name',e.target.value)} />
+            {error && <p style={{ fontSize:11, color:'var(--accent-amber)', marginTop:4 }}>{error}</p>}
+          </div>
+          {/* 股數 + 成交價 */}
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
             <div>
-              <p className="label" style={{ marginBottom:6 }}>股數</p>
+              <p className="label" style={{ marginBottom:6 }}>股數 <span style={{ color:'var(--accent-blue)' }}>*</span></p>
               <input className="input" type="number" placeholder="0" value={form.quantity} onChange={e=>set('quantity',e.target.value)} />
             </div>
             <div>
-              <p className="label" style={{ marginBottom:6 }}>成交價</p>
+              <p className="label" style={{ marginBottom:6 }}>成交價 <span style={{ color:'var(--accent-blue)' }}>*</span></p>
               <input className="input" type="number" placeholder="0" value={form.price} onChange={e=>set('price',e.target.value)} />
             </div>
           </div>
+          {/* 手續費 + 稅 */}
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
             <div>
               <p className="label" style={{ marginBottom:6 }}>手續費</p>
@@ -326,23 +386,32 @@ function AddTransactionModal({ accounts, onClose, onSaved }) {
               <input className="input" type="number" placeholder="0" value={form.tax} onChange={e=>set('tax',e.target.value)} />
             </div>
           </div>
+          {/* 日期 */}
           <div>
             <p className="label" style={{ marginBottom:6 }}>交易日期</p>
             <input className="input" type="date" value={form.trade_date} onChange={e=>set('trade_date',e.target.value)} />
           </div>
+          {/* 備註 */}
           <div>
             <p className="label" style={{ marginBottom:6 }}>備註（選填）</p>
             <input className="input" placeholder="交易原因" value={form.note} onChange={e=>set('note',e.target.value)} />
           </div>
+          {/* 總金額 */}
           {total>0 && (
             <div style={{ background:'var(--bg-input)', borderRadius:'var(--radius-md)', padding:'10px 14px', display:'flex', justifyContent:'space-between' }}>
               <span style={{ fontSize:13, color:'var(--text-secondary)' }}>總金額</span>
               <span className="text-mono" style={{ fontSize:13, fontWeight:500 }}>NT$ {formatNTD(total)}</span>
             </div>
           )}
+          {/* 買入時顯示提示 */}
+          {!isEdit && form.type==='buy' && (
+            <p style={{ fontSize:11, color:'var(--text-muted)', textAlign:'center' }}>
+              買入交易將自動同步至持倉（相同代號自動合併）
+            </p>
+          )}
           <button className="btn btn-primary" style={{ width:'100%', marginTop:4 }}
             onClick={save} disabled={saving||!form.symbol||!form.quantity||!form.price}>
-            {saving?'儲存中...':'新增交易'}
+            {saving?'儲存中...':isEdit?'儲存變更':'新增交易'}
           </button>
         </div>
       </div>
@@ -358,12 +427,10 @@ function AddPnlModal({ accounts, onClose, onSaved }) {
   })
   const [saving, setSaving] = useState(false)
   const set = (k,v) => setForm(f=>({...f,[k]:v}))
-
   const PNL_TYPES = [
     { value:'dividend', label:'股利/配息' }, { value:'sell_profit', label:'賣出損益' },
     { value:'interest', label:'利息' }, { value:'other', label:'其他' },
   ]
-
   async function save() {
     if (!form.amount) return
     setSaving(true)
@@ -375,7 +442,6 @@ function AddPnlModal({ accounts, onClose, onSaved }) {
     })
     setSaving(false); onSaved()
   }
-
   return (
     <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.75)', zIndex:200, display:'flex', alignItems:'center', justifyContent:'center', padding:'0 16px' }}
       onClick={e=>e.target===e.currentTarget&&onClose()}>
@@ -473,17 +539,14 @@ function HoldingsTab({ accounts, refreshTick, onRefreshDone }) {
   }
 
   const accountOptions = [{ id:'全部', name:'全部' }, ...accounts]
-
   let filtered = allHoldings
   if (marketFilter !== '全部') filtered = filtered.filter(h => h.market === marketFilter)
   if (accountFilter !== '全部') filtered = filtered.filter(h => h.accountId === accountFilter)
 
   filtered = filtered.map(h => {
     const price = getPrice(h)
-    const qty = Number(h.quantity)
-    const avg = Number(h.avg_cost)
-    const marketVal = price * qty
-    const cost = avg * qty
+    const qty = Number(h.quantity), avg = Number(h.avg_cost)
+    const marketVal = price * qty, cost = avg * qty
     const pnl = marketVal - cost
     const pct = cost > 0 ? (pnl/cost)*100 : 0
     return { ...h, price, marketVal, cost, pnl, pct }
@@ -500,7 +563,7 @@ function HoldingsTab({ accounts, refreshTick, onRefreshDone }) {
   const totalPnl    = totalMarket - totalCost
   const totalPct    = totalCost > 0 ? (totalPnl/totalCost)*100 : 0
 
-  const chipBtn = (active, label, onClick) => (
+  const chip = (active, label, onClick) => (
     <button onClick={onClick} style={{
       padding:'4px 10px', borderRadius:20, fontSize:12, cursor:'pointer', whiteSpace:'nowrap', flexShrink:0,
       background:active?'var(--accent-blue)':'var(--bg-input)',
@@ -511,7 +574,6 @@ function HoldingsTab({ accounts, refreshTick, onRefreshDone }) {
 
   return (
     <div>
-      {/* Summary */}
       <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:14 }}>
         <div className="card-sm">
           <p className="label" style={{ marginBottom:4 }}>投資市值</p>
@@ -523,26 +585,19 @@ function HoldingsTab({ accounts, refreshTick, onRefreshDone }) {
           <div style={{ fontSize:12, color:formatPctColor(totalPct) }}>{formatPct(totalPct)}</div>
         </div>
       </div>
-
       {quoteStatus === 'error' && (
         <div style={{ background:'rgba(245,158,11,0.1)', border:'1px solid rgba(245,158,11,0.3)', borderRadius:'var(--radius-md)', padding:'8px 12px', marginBottom:12, fontSize:12, color:'var(--accent-amber)' }}>
           ⚠️ 無法取得即時報價，顯示最後儲存的價格
         </div>
       )}
-
-      {/* 市場篩選（無 emoji） */}
       <div style={{ display:'flex', gap:5, overflowX:'auto', paddingBottom:2, marginBottom:8 }}>
-        {MARKETS.map(m => chipBtn(marketFilter===m, MARKET_LABELS[m], ()=>setMarketFilter(m)))}
+        {MARKETS.map(m => chip(marketFilter===m, MARKET_LABELS[m], ()=>setMarketFilter(m)))}
       </div>
-
-      {/* 帳戶篩選（有多帳戶時才顯示） */}
       {accounts.length > 1 && (
         <div style={{ display:'flex', gap:5, overflowX:'auto', paddingBottom:2, marginBottom:8 }}>
-          {accountOptions.map(a => chipBtn(accountFilter===a.id, a.name, ()=>setAccountFilter(a.id)))}
+          {accountOptions.map(a => chip(accountFilter===a.id, a.name, ()=>setAccountFilter(a.id)))}
         </div>
       )}
-
-      {/* 排序 */}
       <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:12 }}>
         <span style={{ fontSize:11, color:'var(--text-muted)', flexShrink:0 }}>排序</span>
         {SORT_OPTIONS.map(s=>(
@@ -554,17 +609,13 @@ function HoldingsTab({ accounts, refreshTick, onRefreshDone }) {
           }}>{s}</button>
         ))}
       </div>
-
-      {/* 持倉列表 */}
       {filtered.length===0 ? (
         <div style={{ textAlign:'center', padding:'40px 0', color:'var(--text-muted)', fontSize:13 }}>尚無持倉資料</div>
       ) : (
         <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
           {filtered.map(h=>(
             <div key={h.id} className="card-sm" style={{ padding:'10px 12px' }}>
-              {/* 主行 */}
               <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-                {/* 左：代號/名稱/市場 */}
                 <div style={{ flex:1, minWidth:0 }}>
                   <div style={{ display:'flex', alignItems:'center', gap:5 }}>
                     <span style={{ fontSize:14, fontWeight:700, fontFamily:'DM Mono', color:'var(--text-primary)' }}>{h.symbol}</span>
@@ -575,8 +626,6 @@ function HoldingsTab({ accounts, refreshTick, onRefreshDone }) {
                     {h.name} · {h.accountName}
                   </p>
                 </div>
-
-                {/* 中：現價/股數 */}
                 <div style={{ textAlign:'right', flexShrink:0 }}>
                   <p style={{ fontSize:13, fontFamily:'DM Mono', fontWeight:600, color:'var(--text-primary)' }}>
                     {h.price > 0 ? formatNTD(h.price) : '—'}
@@ -585,8 +634,6 @@ function HoldingsTab({ accounts, refreshTick, onRefreshDone }) {
                     {Number(h.quantity).toLocaleString('en-US', {maximumFractionDigits:4})} 股
                   </p>
                 </div>
-
-                {/* 右：損益% */}
                 <div style={{ textAlign:'right', flexShrink:0, minWidth:58 }}>
                   <p style={{ fontSize:13, fontFamily:'DM Mono', fontWeight:700, color:h.cost>0?formatPctColor(h.pct):'var(--text-muted)' }}>
                     {h.cost>0 ? (h.pct>=0?'+':'')+h.pct.toFixed(2)+'%' : '—'}
@@ -595,35 +642,22 @@ function HoldingsTab({ accounts, refreshTick, onRefreshDone }) {
                     {h.cost>0 ? (h.pnl>=0?'+':'')+formatNTD(h.pnl) : ''}
                   </p>
                 </div>
-
-                {/* 編輯 */}
                 <button onClick={()=>setEditHolding(h)} style={{
                   flexShrink:0, width:28, height:28, borderRadius:6,
                   background:'var(--bg-input)', border:'1px solid var(--border)',
                   display:'flex', alignItems:'center', justifyContent:'center',
                   cursor:'pointer', color:'var(--text-muted)',
-                }}>
-                  <Edit2 size={12}/>
-                </button>
+                }}><Edit2 size={12}/></button>
               </div>
-
-              {/* 次行：均價 · 市值 · 成本 */}
               <div style={{ display:'flex', gap:12, marginTop:7, paddingTop:7, borderTop:'1px solid var(--border)' }}>
-                <span style={{ fontSize:11, color:'var(--text-muted)' }}>
-                  均價 <span style={{ color:'var(--text-secondary)', fontFamily:'DM Mono' }}>{formatNTD(h.avg_cost)}</span>
-                </span>
-                <span style={{ fontSize:11, color:'var(--text-muted)' }}>
-                  市值 <span style={{ color:'var(--text-secondary)', fontFamily:'DM Mono' }}>{formatNTD(h.marketVal)}</span>
-                </span>
-                <span style={{ fontSize:11, color:'var(--text-muted)' }}>
-                  成本 <span style={{ color:'var(--text-secondary)', fontFamily:'DM Mono' }}>{formatNTD(h.cost)}</span>
-                </span>
+                <span style={{ fontSize:11, color:'var(--text-muted)' }}>均價 <span style={{ color:'var(--text-secondary)', fontFamily:'DM Mono' }}>{formatNTD(h.avg_cost)}</span></span>
+                <span style={{ fontSize:11, color:'var(--text-muted)' }}>市值 <span style={{ color:'var(--text-secondary)', fontFamily:'DM Mono' }}>{formatNTD(h.marketVal)}</span></span>
+                <span style={{ fontSize:11, color:'var(--text-muted)' }}>成本 <span style={{ color:'var(--text-secondary)', fontFamily:'DM Mono' }}>{formatNTD(h.cost)}</span></span>
               </div>
             </div>
           ))}
         </div>
       )}
-
       {editHolding && (
         <EditHoldingModal
           holding={editHolding}
@@ -637,10 +671,11 @@ function HoldingsTab({ accounts, refreshTick, onRefreshDone }) {
 }
 
 // ── 交易分頁 ───────────────────────────────────────────────
-function TransactionsTab({ accounts }) {
+function TransactionsTab({ accounts, onHoldingChanged }) {
   const [txns, setTxns] = useState([])
   const [loading, setLoading] = useState(true)
   const [showAdd, setShowAdd] = useState(false)
+  const [editTxn, setEditTxn] = useState(null)
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
   const accountMap = Object.fromEntries(accounts.map(a=>[a.id,a.name]))
@@ -657,6 +692,12 @@ function TransactionsTab({ accounts }) {
     const { data } = await q
     setTxns(data||[])
     setLoading(false)
+  }
+
+  async function deleteTxn(id) {
+    if (!confirm('確定刪除此交易紀錄？')) return
+    await supabase.from('transactions').delete().eq('id', id)
+    load()
   }
 
   const totalBuy  = txns.filter(t=>t.type==='buy').reduce((s,t)=>s+Number(t.quantity)*Number(t.price)+Number(t.fee||0),0)
@@ -720,12 +761,28 @@ function TransactionsTab({ accounts }) {
                     <p className="text-mono" style={{ fontSize:13, fontWeight:500 }}>{formatNTD(Number(t.quantity)*Number(t.price))}</p>
                     <p style={{ fontSize:11, color:'var(--text-muted)' }}>{Number(t.quantity).toLocaleString()} 股 · @{formatNTD(t.price)}</p>
                   </div>
+                  {/* 編輯/刪除 */}
+                  <div style={{ display:'flex', flexDirection:'column', gap:4, flexShrink:0 }}>
+                    <button onClick={()=>setEditTxn(t)} style={{ width:26, height:26, borderRadius:6, background:'var(--bg-input)', border:'1px solid var(--border)', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', color:'var(--text-muted)' }}>
+                      <Edit2 size={11}/>
+                    </button>
+                    <button onClick={()=>deleteTxn(t.id)} style={{ width:26, height:26, borderRadius:6, background:'rgba(239,68,68,0.08)', border:'1px solid rgba(239,68,68,0.2)', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', color:'var(--loss)' }}>
+                      <Trash2 size={11}/>
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
           )
       }
-      {showAdd && <AddTransactionModal accounts={accounts} onClose={()=>setShowAdd(false)} onSaved={()=>{setShowAdd(false);load()}}/>}
+      {showAdd && (
+        <TransactionModal accounts={accounts} onClose={()=>setShowAdd(false)}
+          onSaved={()=>{ setShowAdd(false); load(); onHoldingChanged() }} />
+      )}
+      {editTxn && (
+        <TransactionModal accounts={accounts} transaction={editTxn} onClose={()=>setEditTxn(null)}
+          onSaved={()=>{ setEditTxn(null); load() }} />
+      )}
     </div>
   )
 }
@@ -840,18 +897,17 @@ export default function Invest() {
   const [lastUpdated, setLastUpdated] = useState(null)
   const [refreshTick, setRefreshTick] = useState(0)
 
-  useEffect(()=>{
-    async function load() {
-      const { data:{user} } = await supabase.auth.getUser()
-      if (!user) { setLoading(false); return }
-      const { data } = await supabase
-        .from('accounts').select('*, holdings(*)')
-        .eq('user_id',user.id).eq('is_active',true).neq('type','debt')
-      setAccounts(data||[])
-      setLoading(false)
-    }
-    load()
-  }, [refreshTick])
+  async function loadAccounts() {
+    const { data:{user} } = await supabase.auth.getUser()
+    if (!user) { setLoading(false); return }
+    const { data } = await supabase
+      .from('accounts').select('*, holdings(*)')
+      .eq('user_id',user.id).eq('is_active',true).neq('type','debt')
+    setAccounts(data||[])
+    setLoading(false)
+  }
+
+  useEffect(()=>{ loadAccounts() }, [refreshTick])
 
   async function handleRefresh() {
     setQuoteLoading(true)
@@ -868,17 +924,11 @@ export default function Invest() {
         action={
           tab==='持倉' ? (
             <div style={{ display:'flex', gap:6, alignItems:'center' }}>
-              {lastUpdated && (
-                <span style={{ fontSize:10, color:'var(--text-muted)' }}>
-                  {lastUpdated.toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit'})}
-                </span>
-              )}
-              <button className="btn btn-icon" onClick={handleRefresh} title="更新報價"
-                style={{ opacity:quoteLoading?0.5:1 }}>
+              {lastUpdated && <span style={{ fontSize:10, color:'var(--text-muted)' }}>{lastUpdated.toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit'})}</span>}
+              <button className="btn btn-icon" onClick={handleRefresh} style={{ opacity:quoteLoading?0.5:1 }}>
                 <RefreshCw size={14} style={{ animation:quoteLoading?'spin 1s linear infinite':undefined }}/>
               </button>
-              <button className="btn btn-primary" style={{ padding:'7px 12px', fontSize:12 }}
-                onClick={()=>setShowAddHolding(true)}>
+              <button className="btn btn-primary" style={{ padding:'7px 12px', fontSize:12 }} onClick={()=>setShowAddHolding(true)}>
                 <Plus size={14}/> 新增持倉
               </button>
             </div>
@@ -890,24 +940,15 @@ export default function Invest() {
         ? [1,2,3].map(i=><div key={i} className="skeleton" style={{ height:68, borderRadius:'var(--radius-md)', marginBottom:8 }}/>)
         : (
           <>
-            {tab==='持倉' && (
-              <HoldingsTab
-                accounts={accounts}
-                refreshTick={refreshTick}
-                onRefreshDone={()=>setRefreshTick(t=>t+1)}
-              />
-            )}
-            {tab==='交易' && <TransactionsTab accounts={accounts}/>}
+            {tab==='持倉' && <HoldingsTab accounts={accounts} refreshTick={refreshTick} onRefreshDone={()=>setRefreshTick(t=>t+1)}/>}
+            {tab==='交易' && <TransactionsTab accounts={accounts} onHoldingChanged={()=>setRefreshTick(t=>t+1)}/>}
             {tab==='損益' && <PnlTab accounts={accounts}/>}
           </>
         )
       }
       {showAddHolding && (
-        <AddHoldingModal
-          accounts={accounts}
-          onClose={()=>setShowAddHolding(false)}
-          onSaved={()=>{ setShowAddHolding(false); setRefreshTick(t=>t+1) }}
-        />
+        <AddHoldingModal accounts={accounts} onClose={()=>setShowAddHolding(false)}
+          onSaved={()=>{ setShowAddHolding(false); setRefreshTick(t=>t+1) }} />
       )}
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
