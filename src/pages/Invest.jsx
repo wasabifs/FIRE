@@ -99,7 +99,7 @@ function AddHoldingModal({ accounts, onClose, onSaved }) {
       onClick={e=>e.target===e.currentTarget&&onClose()}>
       <div style={{ width:'100%', maxWidth:480, background:'var(--bg-surface)',
         borderRadius:'24px 24px 0 0', border:'1px solid var(--border)',
-        maxHeight:'calc(100vh - 64px - var(--safe-bottom) - var(--safe-top))', display:'flex', flexDirection:'column', overflow:'hidden' }}>
+        maxHeight:'calc(100svh - var(--safe-top))', display:'flex', flexDirection:'column', overflow:'hidden' }}>
         <div style={{ padding:'20px 20px 14px', borderBottom:'1px solid var(--border)', flexShrink:0,
           display:'flex', alignItems:'center', justifyContent:'space-between' }}>
           <h2 style={{ fontSize:18, fontWeight:600 }}>新增持倉</h2>
@@ -336,7 +336,7 @@ function TransactionModal({ accounts, transaction, onClose, onSaved }) {
       onClick={e=>e.target===e.currentTarget&&onClose()}>
       <div style={{ width:'100%', maxWidth:480, background:'var(--bg-surface)',
         borderRadius:'24px 24px 0 0', border:'1px solid var(--border)',
-        maxHeight:'calc(100vh - 64px - var(--safe-bottom) - var(--safe-top))', display:'flex', flexDirection:'column', overflow:'hidden' }}>
+        maxHeight:'calc(100svh - var(--safe-top))', display:'flex', flexDirection:'column', overflow:'hidden' }}>
 
         {/* 固定標題 */}
         <div style={{ padding:'20px 20px 14px', borderBottom:'1px solid var(--border)', flexShrink:0 }}>
@@ -561,7 +561,7 @@ function AddPnlModal({ accounts, onClose, onSaved }) {
         background:'var(--bg-surface)',
         borderRadius:'24px 24px 0 0',
         border:'1px solid var(--border)',
-        maxHeight:'calc(100vh - 64px - var(--safe-bottom) - var(--safe-top))',
+        maxHeight:'calc(100svh - var(--safe-top))',
         display:'flex', flexDirection:'column',
         overflow:'hidden',
       }}>
