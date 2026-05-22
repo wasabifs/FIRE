@@ -9,23 +9,28 @@ const tabs = [
   { to: '/goals',   icon: Target,          label: '目標' },
 ]
 
+const BG = 'rgba(8,12,20,0.97)'
+
 export default function BottomNav() {
   return (
-    <nav style={{
-      position: 'fixed',
-      bottom: 0,
-      left: '50%',
-      transform: 'translateX(-50%)',
-      width: '100%',
-      maxWidth: 430,
-      zIndex: 100,
-      background: 'rgba(8,12,20,0.97)',
-      backdropFilter: 'blur(20px)',
-      WebkitBackdropFilter: 'blur(20px)',
-      borderTop: '1px solid var(--border)',
-      paddingBottom: 'var(--safe-bottom)',
-    }}>
-      <div style={{ display: 'flex', alignItems: 'center', height: 64 }}>
+    <>
+      {/* 圖示列，高度固定 64px，貼在 safe area 上方 */}
+      <nav style={{
+        position: 'fixed',
+        bottom: 'var(--safe-bottom)',
+        left: '50%',
+        transform: 'translateX(-50%)',
+        width: '100%',
+        maxWidth: 430,
+        height: 64,
+        zIndex: 100,
+        background: BG,
+        backdropFilter: 'blur(20px)',
+        WebkitBackdropFilter: 'blur(20px)',
+        borderTop: '1px solid var(--border)',
+        display: 'flex',
+        alignItems: 'center',
+      }}>
         {tabs.map(({ to, icon: Icon, label }) => (
           <NavLink key={to} to={to} end={to === '/'} style={{ flex: 1, textDecoration: 'none' }}>
             {({ isActive }) => (
@@ -43,7 +48,20 @@ export default function BottomNav() {
             )}
           </NavLink>
         ))}
-      </div>
-    </nav>
+      </nav>
+
+      {/* safe area 填色，蓋住 home indicator */}
+      <div style={{
+        position: 'fixed',
+        bottom: 0,
+        left: '50%',
+        transform: 'translateX(-50%)',
+        width: '100%',
+        maxWidth: 430,
+        height: 'var(--safe-bottom)',
+        background: BG,
+        zIndex: 100,
+      }} />
+    </>
   )
 }
