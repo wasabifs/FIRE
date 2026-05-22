@@ -165,6 +165,7 @@ function AddHoldingModal({ accounts, onClose, onSaved }) {
             <span className="text-mono" style={{ fontSize:15, fontWeight:600, color:avgCost?'var(--text-primary)':'var(--text-muted)' }}>
               {avgCost ? formatPrice(avgCost) : '—'}
             </span>
+          </div>
           <button className="btn btn-primary" style={{ width:'100%', marginTop:4 }}
             onClick={save} disabled={saving||!form.symbol||!form.quantity||!form.total_cost}>
             {saving?'儲存中...':'新增持倉'}
