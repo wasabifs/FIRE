@@ -21,15 +21,6 @@ const ASSET_TYPES = [
 
 
 // 取得實際可用視窗高度（排除 iOS status bar / 鍵盤工具列）
-function useSheetHeight() {
-  const [h, setH] = useState(() => window.innerHeight)
-  useEffect(() => {
-    const update = () => setH(window.innerHeight)
-    window.addEventListener('resize', update)
-    return () => window.removeEventListener('resize', update)
-  }, [])
-  return h - 84
-}
 
 function TabBar({ tabs, active, onChange }) {
   return (
@@ -80,7 +71,6 @@ function useSymbolLookup(symbol, market, onResult) {
 
 // ── 新增持倉 Modal ──────────────────────────────────────────
 function AddHoldingModal({ accounts, onClose, onSaved }) {
-  const sheetHeight = useSheetHeight()
   const [form, setForm] = useState({
     asset_type:'stock', account_id:accounts[0]?.id||'',
     symbol:'', name:'', market:'TW', quantity:'', total_cost:'',
@@ -108,11 +98,11 @@ function AddHoldingModal({ accounts, onClose, onSaved }) {
 
   return (
     <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.75)', zIndex:200,
-      display:'flex', alignItems:'flex-end', justifyContent:'center' }}
+      display:'flex', alignItems:'center', justifyContent:'center', padding:'0 16px' }}
       onClick={e=>e.target===e.currentTarget&&onClose()}>
       <div style={{ width:'100%', maxWidth:480, background:'var(--bg-surface)',
-        borderRadius:'24px 24px 0 0', border:'1px solid var(--border)',
-        height:sheetHeight, display:'flex', flexDirection:'column', overflow:'hidden' }}>
+        borderRadius:'var(--radius-xl)', border:'1px solid var(--border)',
+        maxHeight:'90%', display:'flex', flexDirection:'column', overflow:'hidden' }}>
         <div style={{ padding:'20px 20px 14px', borderBottom:'1px solid var(--border)', flexShrink:0,
           display:'flex', alignItems:'center', justifyContent:'space-between' }}>
           <h2 style={{ fontSize:18, fontWeight:600 }}>新增持倉</h2>
@@ -264,7 +254,6 @@ function EditHoldingModal({ holding, onClose, onSaved }) {
 
 // ── 新增/編輯交易 Modal ──────────────────────────────────────
 function TransactionModal({ accounts, transaction, onClose, onSaved }) {
-  const sheetHeight = useSheetHeight()
   const isEdit = !!transaction
   const [form, setForm] = useState({
     account_id: transaction?.account_id || accounts[0]?.id || '',
@@ -346,11 +335,11 @@ function TransactionModal({ accounts, transaction, onClose, onSaved }) {
 
   return (
     <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.75)', zIndex:200,
-      display:'flex', alignItems:'flex-end', justifyContent:'center' }}
+      display:'flex', alignItems:'center', justifyContent:'center', padding:'0 16px' }}
       onClick={e=>e.target===e.currentTarget&&onClose()}>
       <div style={{ width:'100%', maxWidth:480, background:'var(--bg-surface)',
-        borderRadius:'24px 24px 0 0', border:'1px solid var(--border)',
-        height:sheetHeight, display:'flex', flexDirection:'column', overflow:'hidden' }}>
+        borderRadius:'var(--radius-xl)', border:'1px solid var(--border)',
+        maxHeight:'90%', display:'flex', flexDirection:'column', overflow:'hidden' }}>
 
         {/* 固定標題 */}
         <div style={{ padding:'20px 20px 14px', borderBottom:'1px solid var(--border)', flexShrink:0 }}>
@@ -461,7 +450,6 @@ function TransactionModal({ accounts, transaction, onClose, onSaved }) {
 
 // ── 新增損益 Modal（賣出 / 股利 兩分頁）─────────────────────
 function AddPnlModal({ accounts, onClose, onSaved }) {
-  const sheetHeight = useSheetHeight()
   const [type, setType] = useState('sell_profit')
   const [saving, setSaving] = useState(false)
 
@@ -568,15 +556,15 @@ function AddPnlModal({ accounts, onClose, onSaved }) {
 
   return (
     <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.75)', zIndex:200,
-      display:'flex', alignItems:'flex-end', justifyContent:'center' }}
+      display:'flex', alignItems:'center', justifyContent:'center', padding:'0 16px' }}
       onClick={e => e.target === e.currentTarget && onClose()}>
 
       <div style={{
         width:'100%', maxWidth:480,
         background:'var(--bg-surface)',
-        borderRadius:'24px 24px 0 0',
+        borderRadius:'var(--radius-xl)',
         border:'1px solid var(--border)',
-        height:sheetHeight,
+        maxHeight:'90%',
         display:'flex', flexDirection:'column',
         overflow:'hidden',
       }}>
