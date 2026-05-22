@@ -6,6 +6,19 @@ import { fetchQuotes, lookupSymbol } from '../lib/quote'
 import { getRates } from '../lib/fx'
 import PageHeader from '../components/layout/PageHeader'
 
+// modal 開啟時隱藏底部導覽列（防止鍵盤彈出時 nav 往上跑蓋住內容）
+function ModalOverlay({ onClick, children }) {
+  useEffect(() => {
+    document.body.dataset.modal = 'open'
+    return () => { delete document.body.dataset.modal }
+  }, [])
+  return (
+    <div className="modal-overlay" onClick={onClick}>
+      {children}
+    </div>
+  )
+}
+
 const TABS = ['持倉', '交易', '損益']
 const MARKETS = ['全部', 'TW', 'US', 'JP', 'CRYPTO', 'FUND']
 const MARKET_LABELS = { 全部:'全部', TW:'台股', US:'美股', JP:'日股', CRYPTO:'加密', FUND:'基金' }
@@ -96,7 +109,7 @@ function AddHoldingModal({ accounts, onClose, onSaved }) {
   }
 
   return (
-    <div className="modal-overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
+    <ModalOverlay onClick={e=>e.target===e.currentTarget&&onClose()}>
       <div className="modal-content" style={{ background:'var(--bg-surface)',
         borderRadius:'var(--radius-xl)', border:'1px solid var(--border)',
         display:'flex', flexDirection:'column' }}>
@@ -170,7 +183,7 @@ function AddHoldingModal({ accounts, onClose, onSaved }) {
           </div>
         </div>
       </div>
-    </div>
+    </ModalOverlay>
   )
 }
 
@@ -204,7 +217,7 @@ function EditHoldingModal({ holding, onClose, onSaved }) {
   }
 
   return (
-    <div className="modal-overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
+    <ModalOverlay onClick={e=>e.target===e.currentTarget&&onClose()}>
       <div className="modal-content" style={{ background:'var(--bg-surface)', borderRadius:'var(--radius-xl)', padding:'24px 20px 28px', border:'1px solid var(--border)' }}>
         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:20 }}>
           <div>
@@ -240,7 +253,7 @@ function EditHoldingModal({ holding, onClose, onSaved }) {
           }}>刪除此持倉</button>
         </div>
       </div>
-    </div>
+    </ModalOverlay>
   )
 }
 
@@ -326,7 +339,7 @@ function TransactionModal({ accounts, transaction, onClose, onSaved }) {
   }
 
   return (
-    <div className="modal-overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
+    <ModalOverlay onClick={e=>e.target===e.currentTarget&&onClose()}>
       <div className="modal-content" style={{ background:'var(--bg-surface)',
         borderRadius:'var(--radius-xl)', border:'1px solid var(--border)',
         display:'flex', flexDirection:'column' }}>
@@ -430,7 +443,7 @@ function TransactionModal({ accounts, transaction, onClose, onSaved }) {
           </div>
         </div>
       </div>
-    </div>
+    </ModalOverlay>
   )
 }
 
@@ -541,7 +554,7 @@ function AddPnlModal({ accounts, onClose, onSaved }) {
   function toIsoDate(display) { return display.split('/').join('-') }
 
   return (
-    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+    <ModalOverlay onClick={e => e.target === e.currentTarget && onClose()}>
 
       <div className="modal-content" style={{
         background:'var(--bg-surface)',
@@ -712,7 +725,7 @@ function AddPnlModal({ accounts, onClose, onSaved }) {
           </div>
         </div>
       </div>
-    </div>
+    </ModalOverlay>
   )
 }
 
