@@ -295,26 +295,7 @@ function AddAssetModal({ accountId, accounts, onClose, onSaved }) {
 function EditHoldingModal({ holding, onClose, onSaved }) {
   const [form, setForm] = useState({
     quantity: String(holding.quantity),
-    total_cost: String((Number(holding.quantity) * Number(holding.avg_cost)).toFixed(2)),
-  })
-  const [saving, setSaving] = useState(false)
-  const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
-
-  const avgCost = (form.quantity && form.total_cost && Number(form.quantity) > 0)
-    ? Number(form.total_cost) / Number(form.quantity) : null
-
-  async function save() {
-    if (!form.quantity || !form.total_cost) return
-    setSaving(true)
-    await supabase.from('holdings').update({
-      quantity: Number(form.quantity),
-      avg_cost: avgCost || 0,
-    }).eq('id', holding.id)
-    setSaving(false); onSaved()
-  }
-
-  async function remove() {
-    if (!confirm(`確定刪除 ${holding.name || holding.symbol} 持倉？`)) return
+    total_cost: String(Math.round(Number(holding.quantity) * Number(holding.avg_cost))),
     setSaving(true)
     await supabase.from('holdings').delete().eq('id', holding.id)
     setSaving(false); onSaved()
