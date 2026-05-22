@@ -23,6 +23,7 @@ export default function BottomNav() {
       backdropFilter: 'blur(20px)',
       WebkitBackdropFilter: 'blur(20px)',
       borderTop: '1px solid var(--border)',
+      paddingBottom: 'var(--safe-bottom)',
     }}>
       <div style={{ display: 'flex', alignItems: 'center', height: 64 }}>
         {tabs.map(({ to, icon: Icon, label }) => (
@@ -43,8 +44,6 @@ export default function BottomNav() {
           </NavLink>
         ))}
       </div>
-      {/* home indicator 填色 — 固定 34px，不依賴 env() */}
-      <div style={{ height: 34, background: 'rgba(8,12,20,0.97)' }} />
     </nav>
   )
 }
