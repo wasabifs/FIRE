@@ -352,7 +352,7 @@ function TransactionModal({ accounts, transaction, onClose, onSaved }) {
         borderRadius:'24px 24px 0 0', border:'1px solid var(--border)',
         height:sheetHeight, display:'flex', flexDirection:'column', overflow:'hidden' }}>
 
-        {/* 固定標題 */
+        {/* 固定標題 */}
         <div style={{ padding:'20px 20px 14px', borderBottom:'1px solid var(--border)', flexShrink:0 }}>
           <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:14 }}>
             <h2 style={{ fontSize:18, fontWeight:600 }}>{isEdit ? '編輯交易' : '新增交易'}</h2>
