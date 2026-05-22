@@ -10,6 +10,13 @@ export function formatNTD(value, compact = false) {
   return num.toLocaleString('zh-TW', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
 }
 
+// 專用於顯示股價/均價，保留小數點後兩位
+export function formatPrice(value) {
+  if (value === null || value === undefined) return '—'
+  const num = Number(value)
+  return num.toLocaleString('zh-TW', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+}
+
 export function formatPct(value) {
   if (value === null || value === undefined) return '—'
   const num = Number(value)
