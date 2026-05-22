@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { Plus, ChevronRight, Wallet, Building2, Shield, Landmark, TrendingDown, GripVertical, X, Edit2, Trash2, RefreshCw } from 'lucide-react'
 import { supabase } from '../lib/supabase'
-import { formatNTD } from '../lib/format'
+import { formatNTD, formatPrice } from '../lib/format'
 import { getRates } from '../lib/fx'
 import { lookupSymbol } from '../lib/quote'
 import PageHeader from '../components/layout/PageHeader'
@@ -278,12 +278,7 @@ function AddAssetModal({ accountId, accounts, onClose, onSaved }) {
           <div style={{ background:'var(--bg-input)', borderRadius:'var(--radius-md)', padding:'10px 14px', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
             <span style={{ fontSize:13, color:'var(--text-secondary)' }}>均價（自動計算）</span>
             <span className="text-mono" style={{ fontSize:15, fontWeight:600, color:avgCost?'var(--text-primary)':'var(--text-muted)' }}>
-              {avgCost ? formatNTD(Number(avgCost).toFixed(2)) : '—'}
-            </span>
-          </div>
-          <button className="btn btn-primary" style={{ width:'100%', marginTop:4 }}
-            onClick={save} disabled={saving || !form.symbol || !form.quantity || !form.total_cost}>
-            {saving ? '儲存中...' : '新增持倉'}
+              {avgCost ? formatPrice(avgCost) : '—'}
           </button>
         </div>
       </div>
@@ -345,7 +340,7 @@ function EditHoldingModal({ holding, onClose, onSaved }) {
           <div style={{ background:'var(--bg-input)', borderRadius:'var(--radius-md)', padding:'10px 14px', display:'flex', justifyContent:'space-between' }}>
             <span style={{ fontSize:13, color:'var(--text-secondary)' }}>均價（自動計算）</span>
             <span className="text-mono" style={{ fontSize:13, fontWeight:600, color:avgCost?'var(--text-primary)':'var(--text-muted)' }}>
-              {avgCost ? formatNTD(Number(avgCost).toFixed(2)) : '—'}
+              {avgCost ? formatPrice(avgCost) : '—'}
             </span>
           </div>
           <button className="btn btn-primary" style={{ width:'100%' }} onClick={save} disabled={saving || !form.quantity || !form.total_cost}>
@@ -564,7 +559,7 @@ function DraggableAccountList({ accounts, rates, totalAllTWD, onReorder, onAddHo
                         <p style={{ fontSize:11, color:'var(--text-muted)' }}>
                           {h.asset_type==='cash'
                             ? `現金 ${isForeign ? `${acc.currency} ${formatNTD(h.quantity)}` : `NT$ ${formatNTD(h.quantity)}`}`
-                            : `${Number(h.quantity).toLocaleString()} 股 · 均 ${formatNTD(h.avg_cost)}`}
+                            : `${Number(h.quantity).toLocaleString()} 股 · 均 ${formatPrice(h.avg_cost)}`}
                         </p>
                       </div>
                       <div style={{ textAlign:'right', marginRight:8 }}>
