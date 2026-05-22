@@ -108,8 +108,8 @@ function AddHoldingModal({ accounts, onClose, onSaved }) {
           <h2 style={{ fontSize:18, fontWeight:600 }}>新增持倉</h2>
           <button className="btn btn-icon" onClick={onClose}><X size={16}/></button>
         </div>
-        <div style={{ overflowY:'scroll', WebkitOverflowScrolling:'touch',
-          flex:'1 1 0', minHeight:0, padding:'16px 20px 24px' }}>
+        <div style={{ overflowY:'auto', WebkitOverflowScrolling:'touch',
+          padding:'16px 20px 24px' }}>
           <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
           <div>
             <p className="label" style={{ marginBottom:5 }}>資產類型</p>
@@ -167,14 +167,11 @@ function AddHoldingModal({ accounts, onClose, onSaved }) {
               {avgCost ? formatPrice(avgCost) : '—'}
             </span>
           </div>
-        </div>
-        </div>
-        {/* 固定底部按鈕 */}
-        <div style={{ padding:'12px 20px', borderTop:'1px solid var(--border)', flexShrink:0 }}>
           <button className="btn btn-primary" style={{ width:'100%' }}
             onClick={save} disabled={saving||!form.symbol||!form.quantity||!form.total_cost}>
             {saving?'儲存中...':'新增持倉'}
           </button>
+        </div>
         </div>
       </div>
     </div>
@@ -359,8 +356,8 @@ function TransactionModal({ accounts, transaction, onClose, onSaved }) {
         </div>
 
         {/* 可滾動內容 */}
-        <div style={{ overflowY:'scroll', WebkitOverflowScrolling:'touch',
-          flex:'1 1 0', minHeight:0, padding:'16px 20px 24px' }}>
+        <div style={{ overflowY:'auto', WebkitOverflowScrolling:'touch',
+          padding:'16px 20px 24px' }}>
           <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
 
             <div>
@@ -435,13 +432,11 @@ function TransactionModal({ accounts, transaction, onClose, onSaved }) {
               </p>
             )}
           </div>
-        </div>
-        {/* 固定底部按鈕 */}
-        <div style={{ padding:'12px 20px', borderTop:'1px solid var(--border)', flexShrink:0 }}>
-          <button className="btn btn-primary" style={{ width:'100%' }}
+          <button className="btn btn-primary" style={{ width:'100%', marginTop:4 }}
             onClick={save} disabled={saving||!form.symbol||!form.quantity||!form.total_cost}>
             {saving?'儲存中...':isEdit?'儲存變更':'新增交易'}
           </button>
+        </div>
         </div>
       </div>
     </div>
@@ -586,12 +581,9 @@ function AddPnlModal({ accounts, onClose, onSaved }) {
           </div>
         </div>
 
-        {/* ── 可滾動內容區（iOS 關鍵：flex:'1 1 0' + minHeight:0）── */}
         <div style={{
-          overflowY:'scroll',
+          overflowY:'auto',
           WebkitOverflowScrolling:'touch',
-          flex:'1 1 0',
-          minHeight:0,
           padding:'16px 20px 24px',
         }}>
           <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
@@ -729,14 +721,12 @@ function AddPnlModal({ accounts, onClose, onSaved }) {
               </>
             )}
 
+            <button className="btn btn-primary" style={{ width:'100%', marginTop:4 }}
+              onClick={save} disabled={saving || !canSave}>
+              {saving ? '儲存中...' : '新增紀錄'}
+            </button>
+
           </div>
-        </div>
-        {/* 固定底部按鈕 */}
-        <div style={{ padding:'12px 20px', borderTop:'1px solid var(--border)', flexShrink:0 }}>
-          <button className="btn btn-primary" style={{ width:'100%' }}
-            onClick={save} disabled={saving || !canSave}>
-            {saving ? '儲存中...' : '新增紀錄'}
-          </button>
         </div>
       </div>
     </div>
