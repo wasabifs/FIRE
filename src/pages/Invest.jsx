@@ -96,19 +96,16 @@ function AddHoldingModal({ accounts, onClose, onSaved }) {
   }
 
   return (
-    <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.75)', zIndex:200,
-      display:'flex', alignItems:'center', justifyContent:'center', padding:'0 16px' }}
-      onClick={e=>e.target===e.currentTarget&&onClose()}>
-      <div style={{ width:'100%', maxWidth:480, background:'var(--bg-surface)',
+    <div className="modal-overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
+      <div className="modal-content" style={{ background:'var(--bg-surface)',
         borderRadius:'var(--radius-xl)', border:'1px solid var(--border)',
-        maxHeight:'90%', display:'flex', flexDirection:'column', overflow:'hidden' }}>
+        display:'flex', flexDirection:'column' }}>
         <div style={{ padding:'20px 20px 14px', borderBottom:'1px solid var(--border)', flexShrink:0,
           display:'flex', alignItems:'center', justifyContent:'space-between' }}>
           <h2 style={{ fontSize:18, fontWeight:600 }}>新增持倉</h2>
           <button className="btn btn-icon" onClick={onClose}><X size={16}/></button>
         </div>
-        <div style={{ overflowY:'auto', WebkitOverflowScrolling:'touch',
-          padding:'16px 20px 24px' }}>
+        <div style={{ padding:'16px 20px 24px' }}>
           <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
           <div>
             <p className="label" style={{ marginBottom:5 }}>資產類型</p>
@@ -207,9 +204,8 @@ function EditHoldingModal({ holding, onClose, onSaved }) {
   }
 
   return (
-    <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.75)', zIndex:200, display:'flex', alignItems:'center', justifyContent:'center', padding:'0 16px' }}
-      onClick={e=>e.target===e.currentTarget&&onClose()}>
-      <div style={{ width:'100%', maxWidth:360, background:'var(--bg-surface)', borderRadius:'var(--radius-xl)', padding:'24px 20px 28px', border:'1px solid var(--border)' }}>
+    <div className="modal-overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
+      <div className="modal-content" style={{ background:'var(--bg-surface)', borderRadius:'var(--radius-xl)', padding:'24px 20px 28px', border:'1px solid var(--border)' }}>
         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:20 }}>
           <div>
             <h2 style={{ fontSize:18, fontWeight:600 }}>{holding.symbol}</h2>
@@ -330,12 +326,10 @@ function TransactionModal({ accounts, transaction, onClose, onSaved }) {
   }
 
   return (
-    <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.75)', zIndex:200,
-      display:'flex', alignItems:'center', justifyContent:'center', padding:'0 16px' }}
-      onClick={e=>e.target===e.currentTarget&&onClose()}>
-      <div style={{ width:'100%', maxWidth:480, background:'var(--bg-surface)',
+    <div className="modal-overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
+      <div className="modal-content" style={{ background:'var(--bg-surface)',
         borderRadius:'var(--radius-xl)', border:'1px solid var(--border)',
-        maxHeight:'90%', display:'flex', flexDirection:'column', overflow:'hidden' }}>
+        display:'flex', flexDirection:'column' }}>
 
         {/* 固定標題 */}
         <div style={{ padding:'20px 20px 14px', borderBottom:'1px solid var(--border)', flexShrink:0 }}>
@@ -354,9 +348,8 @@ function TransactionModal({ accounts, transaction, onClose, onSaved }) {
           </div>
         </div>
 
-        {/* 可滾動內容 */}
-        <div style={{ overflowY:'auto', WebkitOverflowScrolling:'touch',
-          padding:'16px 20px 24px' }}>
+        {/* 內容區 */}
+        <div style={{ padding:'16px 20px 24px' }}>
           <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
 
             <div>
@@ -548,18 +541,13 @@ function AddPnlModal({ accounts, onClose, onSaved }) {
   function toIsoDate(display) { return display.split('/').join('-') }
 
   return (
-    <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.75)', zIndex:200,
-      display:'flex', alignItems:'center', justifyContent:'center', padding:'0 16px' }}
-      onClick={e => e.target === e.currentTarget && onClose()}>
+    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
 
-      <div style={{
-        width:'100%', maxWidth:480,
+      <div className="modal-content" style={{
         background:'var(--bg-surface)',
         borderRadius:'var(--radius-xl)',
         border:'1px solid var(--border)',
-        maxHeight:'90%',
         display:'flex', flexDirection:'column',
-        overflow:'hidden',
       }}>
 
         {/* ── 固定標題區 ── */}
@@ -580,8 +568,6 @@ function AddPnlModal({ accounts, onClose, onSaved }) {
         </div>
 
         <div style={{
-          overflowY:'auto',
-          WebkitOverflowScrolling:'touch',
           padding:'16px 20px 24px',
         }}>
           <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
