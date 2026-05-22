@@ -1,4 +1,5 @@
 import { NavLink } from 'react-router-dom'
+import { useEffect, useState } from 'react'
 import { LayoutDashboard, Wallet, TrendingUp, BarChart2, Target } from 'lucide-react'
 
 const tabs = [
@@ -12,25 +13,34 @@ const tabs = [
 const BG = 'rgba(8,12,20,0.97)'
 
 export default function BottomNav() {
+  const [safeBottom, setSafeBottom] = useState(0)
+
+  useEffect(() => {
+    // 用 JS 讀取實際的 safe-area-inset-bottom 值
+    const el = document.createElement('div')
+    el.style.cssText = 'position:fixed;bottom:0;height:env(safe-area-inset-bottom,0px);pointer-events:none;visibility:hidden'
+    document.body.appendChild(el)
+    const h = el.getBoundingClientRect().height
+    document.body.removeChild(el)
+    setSafeBottom(h)
+  }, [])
+
   return (
-    <>
-      {/* 圖示列，高度固定 64px，貼在 safe area 上方 */}
-      <nav style={{
-        position: 'fixed',
-        bottom: 'var(--safe-bottom)',
-        left: '50%',
-        transform: 'translateX(-50%)',
-        width: '100%',
-        maxWidth: 430,
-        height: 64,
-        zIndex: 100,
-        background: BG,
-        backdropFilter: 'blur(20px)',
-        WebkitBackdropFilter: 'blur(20px)',
-        borderTop: '1px solid var(--border)',
-        display: 'flex',
-        alignItems: 'center',
-      }}>
+    <nav style={{
+      position: 'fixed',
+      bottom: 0,
+      left: '50%',
+      transform: 'translateX(-50%)',
+      width: '100%',
+      maxWidth: 430,
+      zIndex: 100,
+      background: BG,
+      backdropFilter: 'blur(20px)',
+      WebkitBackdropFilter: 'blur(20px)',
+      borderTop: '1px solid var(--border)',
+    }}>
+      {/* 圖示列固定 64px */}
+      <div style={{ display: 'flex', alignItems: 'center', height: 64 }}>
         {tabs.map(({ to, icon: Icon, label }) => (
           <NavLink key={to} to={to} end={to === '/'} style={{ flex: 1, textDecoration: 'none' }}>
             {({ isActive }) => (
@@ -48,20 +58,9 @@ export default function BottomNav() {
             )}
           </NavLink>
         ))}
-      </nav>
-
-      {/* safe area 填色，蓋住 home indicator */}
-      <div style={{
-        position: 'fixed',
-        bottom: 0,
-        left: '50%',
-        transform: 'translateX(-50%)',
-        width: '100%',
-        maxWidth: 430,
-        height: 'var(--safe-bottom)',
-        background: BG,
-        zIndex: 100,
-      }} />
-    </>
+      </div>
+      {/* safe area 填色，高度由 JS 實際測量 */}
+      <div style={{ height: safeBottom, background: BG }} />
+    </nav>
   )
 }
