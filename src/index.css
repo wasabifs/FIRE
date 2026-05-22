@@ -30,19 +30,18 @@
   --radius-xl: 20px;
 
   --nav-height: 64px;
+  --safe-top:    env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 html {
-  /* svh = Small Viewport Height
-     永遠等於鍵盤收起時的視窗高度，鍵盤彈出時不縮小
-     dvh 會跟鍵盤縮，導致 nav 往上跳；svh 不會 */
-  height: 100svh;
+  height: 100dvh;
   overscroll-behavior: none;
   -webkit-text-size-adjust: 100%;
 }
 
 body {
-  height: 100svh;
+  height: 100dvh;
   font-family: 'DM Sans', sans-serif;
   background: var(--bg-base);
   color: var(--text-primary);
@@ -55,16 +54,15 @@ body {
 }
 
 #root {
-  height: 100svh;
+  height: 100dvh;
   display: flex;
   flex-direction: column;
   max-width: 430px;
   margin: 0 auto;
   position: relative;
-  /* safe-area-inset-top 讓內容不被 status bar 遮住 */
-  padding-top: env(safe-area-inset-top, 0px);
+  padding-top: var(--safe-top);
   background: var(--bg-base);
-  /* ⚠️ overflow:hidden 絕對不能加 — 會破壞 position:fixed 的基準點 */
+  /* ⚠️ overflow:hidden 絕對不能加 */
 }
 
 /* ── Page container ── */
@@ -72,7 +70,6 @@ body {
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
-  /* nav(64px) + home indicator safe area + 8px buffer */
   padding: 16px 16px calc(var(--nav-height) + env(safe-area-inset-bottom, 0px) + 8px);
   -webkit-overflow-scrolling: touch;
 }
@@ -138,7 +135,7 @@ body {
   border-radius: var(--radius-md); padding: 11px 14px;
   font-family: 'DM Sans', sans-serif; color: var(--text-primary);
   outline: none; transition: border-color 0.15s;
-  font-size: 16px; /* 防止 iOS 自動縮放 */
+  font-size: 16px;
 }
 .input:focus { border-color: var(--accent-blue); }
 .input::placeholder { color: var(--text-muted); }
@@ -150,30 +147,27 @@ select.input {
 }
 
 /* ── Modal overlay ──
-   top:0 + height:100svh 鎖定在鍵盤收起時的視窗範圍，不跟鍵盤縮
-   overflow-y:auto 讓整個 overlay 可捲動，確保底部按鈕可以捲出來
-   鍵盤彈出後使用者上滑 overlay 就能看到被蓋住的欄位 */
+   position:fixed + inset:0 蓋滿整個 viewport（含 nav 上方）
+   z-index:200 在 nav(z:100) 之上，所以 nav 不會擋住 overlay
+   overflow-y:auto 讓內容超出時可以在 overlay 內捲動
+   padding-bottom 留足夠空間讓最後的按鈕不被 nav 遮住 */
 .modal-overlay {
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 100svh;
+  inset: 0;
   background: rgba(0,0,0,0.75);
   z-index: 200;
   overflow-y: auto;
-  padding: 20px 16px calc(env(safe-area-inset-bottom, 0px) + 20px);
+  padding: 20px 16px calc(var(--nav-height) + env(safe-area-inset-bottom, 0px) + 20px);
   display: flex;
   align-items: flex-start;
   justify-content: center;
   -webkit-overflow-scrolling: touch;
 }
 
-/* margin:auto 讓短內容自動垂直置中 */
 .modal-content {
   width: 100%;
   max-width: 480px;
-  margin: auto;
+  margin: auto 0;
 }
 
 /* ── Animations ── */
