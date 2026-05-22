@@ -63,8 +63,6 @@ body {
   margin: 0 auto;
   position: relative;
   padding-top: var(--safe-top);
-  /* nav 64px + home indicator safe area */
-  padding-bottom: calc(64px + var(--safe-bottom));
   background: var(--bg-base);
 }
 
