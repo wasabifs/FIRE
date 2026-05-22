@@ -1,5 +1,4 @@
 import { NavLink } from 'react-router-dom'
-import { useEffect, useState } from 'react'
 import { LayoutDashboard, Wallet, TrendingUp, BarChart2, Target } from 'lucide-react'
 
 const tabs = [
@@ -13,18 +12,6 @@ const tabs = [
 const BG = 'rgba(8,12,20,0.97)'
 
 export default function BottomNav() {
-  const [safeBottom, setSafeBottom] = useState(0)
-
-  useEffect(() => {
-    // 用 JS 讀取實際的 safe-area-inset-bottom 值
-    const el = document.createElement('div')
-    el.style.cssText = 'position:fixed;bottom:0;height:env(safe-area-inset-bottom,0px);pointer-events:none;visibility:hidden'
-    document.body.appendChild(el)
-    const h = el.getBoundingClientRect().height
-    document.body.removeChild(el)
-    setSafeBottom(h)
-  }, [])
-
   return (
     <nav style={{
       position: 'fixed',
@@ -38,6 +25,9 @@ export default function BottomNav() {
       backdropFilter: 'blur(20px)',
       WebkitBackdropFilter: 'blur(20px)',
       borderTop: '1px solid var(--border)',
+      /* 直接用 CSS env() 吃掉 safe area，不需要 JS 量測
+         在沒有 home indicator 的裝置上 fallback 為 0px */
+      paddingBottom: 'env(safe-area-inset-bottom, 0px)',
     }}>
       {/* 圖示列固定 64px */}
       <div style={{ display: 'flex', alignItems: 'center', height: 64 }}>
@@ -59,8 +49,6 @@ export default function BottomNav() {
           </NavLink>
         ))}
       </div>
-      {/* safe area 填色，高度由 JS 實際測量 */}
-      <div style={{ height: safeBottom, background: BG }} />
     </nav>
   )
 }
