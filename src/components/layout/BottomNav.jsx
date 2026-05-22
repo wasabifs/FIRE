@@ -19,11 +19,12 @@ export default function BottomNav() {
       width: '100%',
       maxWidth: 430,
       zIndex: 100,
-      /* 背景色延伸到螢幕最底（包含 home indicator 區域） */
       background: 'rgba(8,12,20,0.97)',
       backdropFilter: 'blur(20px)',
       WebkitBackdropFilter: 'blur(20px)',
       borderTop: '1px solid var(--border)',
+      /* safe area 直接加在 nav 的 paddingBottom，背景自然延伸到底 */
+      paddingBottom: 'env(safe-area-inset-bottom, 0px)',
     }}>
       {/* 圖示列固定 64px */}
       <div style={{ display: 'flex', alignItems: 'center', height: 64 }}>
@@ -45,11 +46,6 @@ export default function BottomNav() {
           </NavLink>
         ))}
       </div>
-      {/* Safe area 填充：讓背景色蓋住 home indicator 區域 */}
-      <div style={{
-        height: 'env(safe-area-inset-bottom, 0px)',
-        background: 'rgba(8,12,20,0.97)',
-      }} />
     </nav>
   )
 }
