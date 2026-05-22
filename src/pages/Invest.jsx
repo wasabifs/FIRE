@@ -618,22 +618,22 @@ function AddPnlModal({ accounts, onClose, onSaved }) {
                 </div>
                 {sellError && <p style={{ fontSize:11, color:'var(--accent-amber)', marginTop:-4 }}>{sellError}</p>}
 
-                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:8 }}>
+                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
                   <div>
-                    <p className="label" style={{ marginBottom:5, fontSize:11 }}>股數</p>
+                    <p className="label" style={{ marginBottom:5 }}>股數</p>
                     <input className="input" type="number" placeholder="0" step="0.00001"
                       value={sell.quantity} onChange={e => setSellF('quantity', e.target.value)} />
                   </div>
                   <div>
-                    <p className="label" style={{ marginBottom:5, fontSize:11 }}>總成本</p>
+                    <p className="label" style={{ marginBottom:5 }}>總成本</p>
                     <input className="input" type="number" placeholder="0"
                       value={sell.total_cost} onChange={e => setSellF('total_cost', e.target.value)} />
                   </div>
-                  <div>
-                    <p className="label" style={{ marginBottom:5, fontSize:11 }}>成交價 <span style={{ color:'var(--accent-blue)' }}>*</span></p>
-                    <input className="input" type="number" placeholder="0"
-                      value={sell.sell_amount} onChange={e => setSellF('sell_amount', e.target.value)} />
-                  </div>
+                </div>
+                <div>
+                  <p className="label" style={{ marginBottom:5 }}>成交價 <span style={{ color:'var(--accent-blue)' }}>*</span></p>
+                  <input className="input" type="number" placeholder="0"
+                    value={sell.sell_amount} onChange={e => setSellF('sell_amount', e.target.value)} />
                 </div>
 
                 <div style={{ background:'var(--bg-input)', borderRadius:'var(--radius-md)', padding:'10px 14px', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
