@@ -180,7 +180,7 @@ function AddHoldingModal({ accounts, onClose, onSaved }) {
 function EditHoldingModal({ holding, onClose, onSaved }) {
   const [form, setForm] = useState({
     quantity: String(holding.quantity),
-    total_cost: String((Number(holding.quantity) * Number(holding.avg_cost)).toFixed(2)),
+    total_cost: String(Math.round(Number(holding.quantity) * Number(holding.avg_cost))),
   })
   const [saving, setSaving] = useState(false)
   const set = (k,v) => setForm(f=>({...f,[k]:v}))
