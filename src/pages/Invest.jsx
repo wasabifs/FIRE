@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { Plus, RefreshCw, X, ArrowUpRight, ArrowDownRight, DollarSign, Edit2, Trash2 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
-import { formatNTD, formatPct, formatPctColor, formatDate } from '../lib/format'
+import { formatNTD, formatPct, formatPctColor, formatDate, formatPrice } from '../lib/format'
 import { fetchQuotes, lookupSymbol } from '../lib/quote'
 import { getRates } from '../lib/fx'
 import PageHeader from '../components/layout/PageHeader'
@@ -162,7 +162,7 @@ function AddHoldingModal({ accounts, onClose, onSaved }) {
           <div style={{ background:'var(--bg-input)', borderRadius:'var(--radius-md)', padding:'10px 14px', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
             <span style={{ fontSize:13, color:'var(--text-secondary)' }}>均價（自動計算）</span>
             <span className="text-mono" style={{ fontSize:15, fontWeight:600, color:avgCost?'var(--text-primary)':'var(--text-muted)' }}>
-              {avgCost ? formatNTD(Number(avgCost).toFixed(2)) : '—'}
+              {avgCost ? formatPrice(avgCost) : '—'}
             </span>
           </div>
           <button className="btn btn-primary" style={{ width:'100%', marginTop:4 }}
@@ -230,7 +230,7 @@ function EditHoldingModal({ holding, onClose, onSaved }) {
           <div style={{ background:'var(--bg-input)', borderRadius:'var(--radius-md)', padding:'10px 14px', display:'flex', justifyContent:'space-between' }}>
             <span style={{ fontSize:13, color:'var(--text-secondary)' }}>均價（自動計算）</span>
             <span className="text-mono" style={{ fontSize:13, fontWeight:600, color:avgCost?'var(--text-primary)':'var(--text-muted)' }}>
-              {avgCost ? formatNTD(Number(avgCost).toFixed(2)) : '—'}
+              {avgCost ? formatPrice(avgCost) : '—'}
             </span>
           </div>
           <button className="btn btn-primary" style={{ width:'100%' }} onClick={save} disabled={saving||!form.quantity||!form.total_cost}>
@@ -410,7 +410,7 @@ function TransactionModal({ accounts, transaction, onClose, onSaved }) {
             <div style={{ background:'var(--bg-input)', borderRadius:'var(--radius-md)', padding:'10px 14px', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
               <span style={{ fontSize:13, color:'var(--text-secondary)' }}>單位價格（自動計算）</span>
               <span className="text-mono" style={{ fontSize:13, fontWeight:600, color:unitPrice?'var(--text-primary)':'var(--text-muted)' }}>
-                {unitPrice ? formatNTD(Number(unitPrice).toFixed(2)) : '—'}
+                {unitPrice ? formatPrice(unitPrice) : '—'}
               </span>
             </div>
 
@@ -920,7 +920,7 @@ function HoldingsTab({ accounts, refreshTick, onRefreshDone, usdRate }) {
                 }}><Edit2 size={12}/></button>
               </div>
               <div style={{ display:'flex', gap:12, marginTop:7, paddingTop:7, borderTop:'1px solid var(--border)' }}>
-                <span style={{ fontSize:11, color:'var(--text-muted)' }}>均價 <span style={{ color:'var(--text-secondary)', fontFamily:'DM Mono' }}>{h.market==='US' ? `$${Number(h.avg_cost).toFixed(2)}` : formatNTD(Number(h.avg_cost).toFixed(2))}</span></span>
+                <span style={{ fontSize:11, color:'var(--text-muted)' }}>均價 <span style={{ color:'var(--text-secondary)', fontFamily:'DM Mono' }}>{h.market==='US' ? `$${Number(h.avg_cost).toFixed(2)}` : formatPrice(h.avg_cost)}</span></span>
                 <span style={{ fontSize:11, color:'var(--text-muted)' }}>市值 <span style={{ color:'var(--text-secondary)', fontFamily:'DM Mono' }}>NT${formatNTD(h.marketVal)}</span></span>
                 <span style={{ fontSize:11, color:'var(--text-muted)' }}>成本 <span style={{ color:'var(--text-secondary)', fontFamily:'DM Mono' }}>NT${formatNTD(h.cost)}</span></span>
               </div>
