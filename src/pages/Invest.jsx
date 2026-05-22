@@ -20,7 +20,6 @@ const ASSET_TYPES = [
 ]
 
 
-// 取得實際可用視窗高度（排除 iOS status bar / 鍵盤工具列）
 
 function TabBar({ tabs, active, onChange }) {
   return (
@@ -166,12 +165,11 @@ function AddHoldingModal({ accounts, onClose, onSaved }) {
             <span className="text-mono" style={{ fontSize:15, fontWeight:600, color:avgCost?'var(--text-primary)':'var(--text-muted)' }}>
               {avgCost ? formatPrice(avgCost) : '—'}
             </span>
-          </div>
-          <button className="btn btn-primary" style={{ width:'100%' }}
+          <button className="btn btn-primary" style={{ width:'100%', marginTop:4 }}
             onClick={save} disabled={saving||!form.symbol||!form.quantity||!form.total_cost}>
             {saving?'儲存中...':'新增持倉'}
           </button>
-        </div>
+          </div>
         </div>
       </div>
     </div>
@@ -431,12 +429,11 @@ function TransactionModal({ accounts, transaction, onClose, onSaved }) {
                 買入交易將自動同步至持倉（相同代號自動合併）
               </p>
             )}
-          </div>
           <button className="btn btn-primary" style={{ width:'100%', marginTop:4 }}
             onClick={save} disabled={saving||!form.symbol||!form.quantity||!form.total_cost}>
             {saving?'儲存中...':isEdit?'儲存變更':'新增交易'}
           </button>
-        </div>
+          </div>
         </div>
       </div>
     </div>
@@ -547,7 +544,7 @@ function AddPnlModal({ accounts, onClose, onSaved }) {
 
   // 日期格式轉換：YYYY-MM-DD ↔ YYYY/MM/DD（顯示用 /，input value 用 -）
   function toDisplayDate(iso) { return iso.replace(/-/g, '/') }
-  function toIsoDate(display) { return display.replace(/\//g, '-') }
+  function toIsoDate(display) { return display.split('/').join('-') }
 
   return (
     <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.75)', zIndex:200,
@@ -725,7 +722,6 @@ function AddPnlModal({ accounts, onClose, onSaved }) {
               onClick={save} disabled={saving || !canSave}>
               {saving ? '儲存中...' : '新增紀錄'}
             </button>
-
           </div>
         </div>
       </div>
