@@ -99,7 +99,7 @@ function AddHoldingModal({ accounts, onClose, onSaved }) {
       onClick={e=>e.target===e.currentTarget&&onClose()}>
       <div style={{ width:'100%', maxWidth:480, background:'var(--bg-surface)',
         borderRadius:'24px 24px 0 0', border:'1px solid var(--border)',
-        height:'88vh', display:'flex', flexDirection:'column', overflow:'hidden' }}>
+        height:'92dvh', display:'flex', flexDirection:'column', overflow:'hidden' }}>
         <div style={{ padding:'20px 20px 14px', borderBottom:'1px solid var(--border)', flexShrink:0,
           display:'flex', alignItems:'center', justifyContent:'space-between' }}>
           <h2 style={{ fontSize:18, fontWeight:600 }}>新增持倉</h2>
@@ -107,7 +107,7 @@ function AddHoldingModal({ accounts, onClose, onSaved }) {
         </div>
         <div style={{ overflowY:'scroll', WebkitOverflowScrolling:'touch',
           flex:'1 1 0', minHeight:0, padding:'16px 20px',
-          paddingBottom:'calc(24px + env(safe-area-inset-bottom, 0px))' }}>
+          paddingBottom:'calc(48px + env(safe-area-inset-bottom, 0px))' }}>
           <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
           <div>
             <p className="label" style={{ marginBottom:5 }}>資產類型</p>
@@ -334,7 +334,7 @@ function TransactionModal({ accounts, transaction, onClose, onSaved }) {
       onClick={e=>e.target===e.currentTarget&&onClose()}>
       <div style={{ width:'100%', maxWidth:480, background:'var(--bg-surface)',
         borderRadius:'24px 24px 0 0', border:'1px solid var(--border)',
-        height:'88vh', display:'flex', flexDirection:'column', overflow:'hidden' }}>
+        height:'92dvh', display:'flex', flexDirection:'column', overflow:'hidden' }}>
 
         {/* 固定標題 */}
         <div style={{ padding:'20px 20px 14px', borderBottom:'1px solid var(--border)', flexShrink:0 }}>
@@ -356,7 +356,7 @@ function TransactionModal({ accounts, transaction, onClose, onSaved }) {
         {/* 可滾動內容 */}
         <div style={{ overflowY:'scroll', WebkitOverflowScrolling:'touch',
           flex:'1 1 0', minHeight:0, padding:'16px 20px',
-          paddingBottom:'calc(24px + env(safe-area-inset-bottom, 0px))' }}>
+          paddingBottom:'calc(48px + env(safe-area-inset-bottom, 0px))' }}>
           <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
 
             <div>
@@ -558,7 +558,7 @@ function AddPnlModal({ accounts, onClose, onSaved }) {
         background:'var(--bg-surface)',
         borderRadius:'24px 24px 0 0',
         border:'1px solid var(--border)',
-        height:'88vh',
+        height:'92dvh',
         display:'flex', flexDirection:'column',
         overflow:'hidden',
       }}>
@@ -587,7 +587,7 @@ function AddPnlModal({ accounts, onClose, onSaved }) {
           flex:'1 1 0',
           minHeight:0,
           padding:'16px 20px',
-          paddingBottom:'calc(24px + env(safe-area-inset-bottom, 0px))',
+          paddingBottom:'calc(48px + env(safe-area-inset-bottom, 0px))',
         }}>
           <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
 
