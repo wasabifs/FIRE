@@ -33,6 +33,40 @@ const ASSET_TYPES = [
   { value:'fund', label:'基金' }, { value:'crypto', label:'加密幣' },
 ]
 
+// ── 台灣基金本地對照表（即時搜尋用，可擴充）─────────────────
+const TW_FUND_DB = [
+  { code:'T3703Y', name:'國泰中小成長基金-新台幣', company:'國泰投信' },
+  { code:'T3707Y', name:'國泰科技生化基金', company:'國泰投信' },
+  { code:'T3701Y', name:'國泰國泰基金', company:'國泰投信' },
+  { code:'T3705Y', name:'國泰價值成長基金', company:'國泰投信' },
+  { code:'T3711Y', name:'國泰台灣高股息基金', company:'國泰投信' },
+  { code:'T3201Y', name:'野村優質基金-累積類型新臺幣計價', company:'野村投信' },
+  { code:'T3207Y', name:'野村中小基金-累積類型', company:'野村投信' },
+  { code:'T3203Y', name:'野村積極成長基金', company:'野村投信' },
+  { code:'T3604Y', name:'安聯台灣科技基金', company:'安聯投信' },
+  { code:'T3601Y', name:'安聯台灣大壩基金', company:'安聯投信' },
+  { code:'T3609Y', name:'安聯台灣智慧基金', company:'安聯投信' },
+  { code:'T1201Y', name:'元大台灣高股息基金', company:'元大投信' },
+  { code:'T1204Y', name:'元大萬泰龍基金', company:'元大投信' },
+  { code:'T2201Y', name:'富邦台灣成長基金', company:'富邦投信' },
+  { code:'T2205Y', name:'富邦精選高股息基金', company:'富邦投信' },
+  { code:'T4501Y', name:'統一大滿貫基金', company:'統一投信' },
+  { code:'T4503Y', name:'統一黑馬基金', company:'統一投信' },
+  { code:'T6301Y', name:'永豐標竿基金', company:'永豐投信' },
+  { code:'T5401Y', name:'聯邦金泰基金', company:'聯邦投信' },
+  { code:'T0501Y', name:'群益馬拉松基金', company:'群益投信' },
+  { code:'T0503Y', name:'群益創新科技基金', company:'群益投信' },
+]
+function searchFundDB(q) {
+  if (!q || q.trim().length < 1) return []
+  const kw = q.trim().toLowerCase()
+  return TW_FUND_DB.filter(f =>
+    f.name.toLowerCase().includes(kw) ||
+    f.code.toLowerCase().includes(kw) ||
+    f.company.toLowerCase().includes(kw)
+  ).slice(0, 8)
+}
+
 function TabBar({ tabs, active, onChange }) {
   return (
     <div style={{ display:'flex', background:'var(--bg-input)', borderRadius:10, padding:3, marginBottom:16 }}>
@@ -131,16 +165,21 @@ function AddHoldingModal({ accounts, onClose, onSaved }) {
     set('unit_price', '')
     setFundError('')
     clearTimeout(searchTimer.current)
-    if (val.trim().length < 2) { setFundResults([]); return }
+    if (val.trim().length < 1) { setFundResults([]); return }
+    // 本地 DB 優先，即時回應
+    const local = searchFundDB(val)
+    if (local.length > 0) { setFundResults(local); return }
+    // 本地找不到才打 API（如直接輸入代碼）
     setFundSearching(true)
     searchTimer.current = setTimeout(async () => {
       try {
         const res = await fetch(`/api/fund-nav?search=${encodeURIComponent(val.trim())}`,
           { signal: AbortSignal.timeout(10000) })
         const data = await res.json()
-        setFundResults(data.funds || [])
-        if ((data.funds || []).length === 0) setFundError('查無基金，請嘗試其他關鍵字')
-      } catch { setFundError('搜尋失敗，請稍後再試') }
+        const hits = data.funds || []
+        setFundResults(hits)
+        if (hits.length === 0) setFundError('查無基金，可直接輸入代碼後手動填入成本')
+      } catch { setFundError('查無結果，可直接輸入代碼後手動填入成本') }
       setFundSearching(false)
     }, 600)
   }
