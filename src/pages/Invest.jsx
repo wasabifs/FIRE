@@ -2,8 +2,8 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { Plus, RefreshCw, X, ArrowUpRight, ArrowDownRight, DollarSign, Edit2, Trash2 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { formatNTD, formatPct, formatPctColor, formatDate, formatPrice } from '../lib/format'
-import { fetchQuotes, lookupSymbol } from '../lib/quote'
-import { fetchSingleFundNav } from '../lib/fundQuote'
+import { fetchQuotes, lookupSymbol, fetchSingleFundNav } from '../lib/quote'
+
 import { getRates } from '../lib/fx'
 import PageHeader from '../components/layout/PageHeader'
 
@@ -32,8 +32,6 @@ const ASSET_TYPES = [
   { value:'stock', label:'股票' }, { value:'etf', label:'ETF' },
   { value:'fund', label:'基金' }, { value:'crypto', label:'加密幣' },
 ]
-
-
 
 function TabBar({ tabs, active, onChange }) {
   return (
