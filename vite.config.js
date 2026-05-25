@@ -23,11 +23,13 @@ export default defineConfig({
         ]
       },
       workbox: {
+        // 新 Service Worker 立即接管，不等舊分頁關閉
+        skipWaiting: true,
+        clientsClaim: true,
         // 讓 /api/* 完全不被 Service Worker 攔截
         navigateFallbackDenylist: [/^\/api\//],
         runtimeCaching: [
           {
-            // 明確排除 /api/* 不快取
             urlPattern: /^\/api\//,
             handler: 'NetworkOnly',
           }
