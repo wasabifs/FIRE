@@ -3,6 +3,7 @@ import { Plus, RefreshCw, X, ArrowUpRight, ArrowDownRight, DollarSign, Edit2, Tr
 import { supabase } from '../lib/supabase'
 import { formatNTD, formatPct, formatPctColor, formatDate, formatPrice } from '../lib/format'
 import { fetchQuotes, lookupSymbol } from '../lib/quote'
+import { fetchSingleFundNav } from '../lib/fundQuote'
 import { getRates } from '../lib/fx'
 import PageHeader from '../components/layout/PageHeader'
 
@@ -84,29 +85,107 @@ function useSymbolLookup(symbol, market, onResult) {
 // ── 新增持倉 Modal ──────────────────────────────────────────
 function AddHoldingModal({ accounts, onClose, onSaved }) {
   const [form, setForm] = useState({
-    asset_type:'stock', account_id:accounts[0]?.id||'',
+    asset_type:'stock', account_id:'',
     symbol:'', name:'', market:'TW', quantity:'', total_cost:'',
+    // 基金專用
+    fund_code:'', fund_name:'', unit_price:'',
   })
   const [saving, setSaving] = useState(false)
+  const [fundLooking, setFundLooking] = useState(false)
+  const [fundError, setFundError] = useState('')
+  const fundTimer = useRef(null)
   const set = (k,v) => setForm(f=>({...f,[k]:v}))
+
+  const isFund = form.asset_type === 'fund'
+
+  // 依資產類型過濾帳戶
+  const filteredAccounts = accounts.filter(a => {
+    if (isFund) return a.type === 'fund'
+    return a.type !== 'fund'
+  })
+
+  // 初始化帳戶：切換資產類型時重設
+  useEffect(() => {
+    const first = filteredAccounts[0]?.id || ''
+    set('account_id', first)
+  }, [form.asset_type, accounts.length])
 
   const { looking, error, trigger } = useSymbolLookup(form.symbol, form.market, r => set('name', r.name))
 
-  const avgCost = (form.quantity && form.total_cost && Number(form.quantity) > 0)
+  // 基金代碼查詢（輸入後 1s 自動抓淨值）
+  function triggerFundLookup(code) {
+    clearTimeout(fundTimer.current)
+    setFundError('')
+    if (!code.trim() || code.trim().length < 4) return
+    setFundLooking(true)
+    fundTimer.current = setTimeout(async () => {
+      const result = await fetchSingleFundNav(code.trim().toUpperCase())
+      setFundLooking(false)
+      if (result?.price) {
+        set('unit_price', String(result.price))
+        if (result.name && !form.fund_name) set('fund_name', result.name)
+        setFundError('')
+      } else {
+        setFundError('查無淨值，可手動輸入成本價')
+      }
+    }, 1000)
+  }
+
+  // 股票均價
+  const avgCost = (!isFund && form.quantity && form.total_cost && Number(form.quantity) > 0)
     ? Number(form.total_cost) / Number(form.quantity) : null
 
   async function save() {
-    if (!form.symbol||!form.quantity||!form.total_cost) return
-    setSaving(true)
-    await supabase.from('holdings').insert({
-      account_id: form.account_id,
-      symbol: form.symbol.trim().toUpperCase(),
-      name: form.name.trim() || form.symbol.trim().toUpperCase(),
-      market: form.market, asset_type: form.asset_type,
-      quantity: Number(form.quantity), avg_cost: avgCost||0, current_price: avgCost||0,
-    })
-    setSaving(false); onSaved()
+    if (isFund) {
+      if (!form.fund_code || !form.unit_price || !form.quantity) return
+      setSaving(true)
+      const code = form.fund_code.trim().toUpperCase()
+      const costPrice = Number(form.unit_price)
+      const qty = Number(form.quantity)
+
+      // 先存持倉
+      const { error: insertErr } = await supabase.from('holdings').insert({
+        account_id: form.account_id,
+        symbol: code,
+        name: form.fund_name.trim() || code,
+        market: 'FUND',
+        asset_type: 'fund',
+        quantity: qty,
+        avg_cost: costPrice,
+        current_price: costPrice,  // 先用成本價，稍後自動更新
+      })
+
+      if (!insertErr) {
+        // 儲存後立刻抓最新淨值寫回
+        const nav = await fetchSingleFundNav(code)
+        if (nav?.price) {
+          // 找剛新增的那筆更新現價
+          const { data: newH } = await supabase.from('holdings')
+            .select('id').eq('account_id', form.account_id).eq('symbol', code)
+            .order('created_at', { ascending: false }).limit(1).maybeSingle()
+          if (newH) {
+            await supabase.from('holdings').update({ current_price: nav.price }).eq('id', newH.id)
+          }
+        }
+      }
+      setSaving(false); onSaved()
+    } else {
+      if (!form.symbol||!form.quantity||!form.total_cost) return
+      setSaving(true)
+      await supabase.from('holdings').insert({
+        account_id: form.account_id,
+        symbol: form.symbol.trim().toUpperCase(),
+        name: form.name.trim() || form.symbol.trim().toUpperCase(),
+        market: form.market, asset_type: form.asset_type,
+        quantity: Number(form.quantity), avg_cost: avgCost||0, current_price: avgCost||0,
+      })
+      setSaving(false); onSaved()
+    }
   }
+
+  // 基金表單是否可送出
+  const fundCanSave = isFund && form.fund_code && form.unit_price && form.quantity && form.account_id
+  const stockCanSave = !isFund && form.symbol && form.quantity && form.total_cost
 
   return (
     <ModalOverlay onClick={e=>e.target===e.currentTarget&&onClose()}>
@@ -120,64 +199,137 @@ function AddHoldingModal({ accounts, onClose, onSaved }) {
         </div>
         <div style={{ padding:'16px 20px 24px' }}>
           <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
+
+          {/* 資產類型 */}
           <div>
             <p className="label" style={{ marginBottom:5 }}>資產類型</p>
             <select className="input" value={form.asset_type} onChange={e=>set('asset_type',e.target.value)}>
               {ASSET_TYPES.map(({value,label})=><option key={value} value={value}>{label}</option>)}
             </select>
           </div>
+
+          {/* 帳戶 — 依類型過濾 */}
           <div>
             <p className="label" style={{ marginBottom:5 }}>帳戶</p>
-            <select className="input" value={form.account_id} onChange={e=>set('account_id',e.target.value)}>
-              {accounts.map(a=><option key={a.id} value={a.id}>{a.name}{a.type?` · ${ACCOUNT_TYPE_LABELS[a.type]||a.type}`:''}</option>)}
-            </select>
-          </div>
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
-            <div>
-              <p className="label" style={{ marginBottom:5 }}>市場</p>
-              <select className="input" value={form.market} onChange={e=>{ set('market',e.target.value); trigger(form.symbol, e.target.value) }}>
-                {['TW','US','JP','CRYPTO','FUND'].map(m=><option key={m} value={m}>{MARKET_LABELS[m]}</option>)}
-              </select>
-            </div>
-            <div>
-              <p className="label" style={{ marginBottom:5 }}>代號 <span style={{ color:'var(--accent-blue)' }}>*</span></p>
-              <div style={{ position:'relative' }}>
-                <input className="input" placeholder="例：0050" value={form.symbol}
-                  onChange={e=>{ set('symbol',e.target.value); trigger(e.target.value, form.market) }}
-                  style={{ paddingRight: looking ? 36 : 14 }} autoFocus />
-                {looking && <div style={{ position:'absolute', right:10, top:'50%', transform:'translateY(-50%)' }}>
-                  <RefreshCw size={14} color="var(--accent-blue)" style={{ animation:'spin 1s linear infinite' }}/>
-                </div>}
+            {filteredAccounts.length === 0 ? (
+              <div style={{ padding:'10px 12px', borderRadius:'var(--radius-md)', background:'rgba(245,158,11,0.1)',
+                border:'1px solid rgba(245,158,11,0.3)', fontSize:12, color:'var(--accent-amber)' }}>
+                ⚠️ 尚無{isFund?'基金':'投資'}帳戶，請先在「資產」頁建立帳戶
               </div>
-            </div>
+            ) : (
+              <select className="input" value={form.account_id} onChange={e=>set('account_id',e.target.value)}>
+                {filteredAccounts.map(a=><option key={a.id} value={a.id}>{a.name}</option>)}
+              </select>
+            )}
           </div>
-          <div>
-            <p className="label" style={{ marginBottom:5 }}>
-              名稱
-              {looking && <span style={{ color:'var(--accent-blue)', marginLeft:6, fontSize:10 }}>查詢中...</span>}
-              {!looking && form.name && <span style={{ color:'var(--profit)', marginLeft:6, fontSize:10 }}>✓ 已自動帶入</span>}
-            </p>
-            <input className="input" placeholder="例：元大台灣50" value={form.name} onChange={e=>set('name',e.target.value)} />
-            {error && <p style={{ fontSize:11, color:'var(--accent-amber)', marginTop:4 }}>{error}</p>}
-          </div>
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
-            <div>
-              <p className="label" style={{ marginBottom:5 }}>股數 <span style={{ color:'var(--accent-blue)' }}>*</span></p>
-              <input className="input" type="number" placeholder="0" step="0.00001" value={form.quantity} onChange={e=>set('quantity',e.target.value)} />
-            </div>
-            <div>
-              <p className="label" style={{ marginBottom:5 }}>總成本 <span style={{ color:'var(--accent-blue)' }}>*</span></p>
-              <input className="input" type="number" placeholder="0" value={form.total_cost} onChange={e=>set('total_cost',e.target.value)} />
-            </div>
-          </div>
-          <div style={{ background:'var(--bg-input)', borderRadius:'var(--radius-md)', padding:'10px 14px', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-            <span style={{ fontSize:13, color:'var(--text-secondary)' }}>均價（自動計算）</span>
-            <span className="text-mono" style={{ fontSize:15, fontWeight:600, color:avgCost?'var(--text-primary)':'var(--text-muted)' }}>
-              {avgCost ? formatPrice(avgCost) : '—'}
-            </span>
-          </div>
+
+          {/* ── 基金專用欄位 ── */}
+          {isFund ? (
+            <>
+              <div>
+                <p className="label" style={{ marginBottom:5 }}>
+                  基金代碼 <span style={{ color:'var(--accent-blue)' }}>*</span>
+                  <span style={{ fontSize:10, color:'var(--text-muted)', marginLeft:6 }}>如 T3703Y</span>
+                </p>
+                <div style={{ position:'relative' }}>
+                  <input className="input" placeholder="例：T3703Y" value={form.fund_code}
+                    onChange={e=>{ set('fund_code', e.target.value); triggerFundLookup(e.target.value) }}
+                    style={{ paddingRight: fundLooking ? 36 : 14 }} autoFocus />
+                  {fundLooking && (
+                    <div style={{ position:'absolute', right:10, top:'50%', transform:'translateY(-50%)' }}>
+                      <RefreshCw size={14} color="var(--accent-blue)" style={{ animation:'spin 1s linear infinite' }}/>
+                    </div>
+                  )}
+                </div>
+                {fundError && <p style={{ fontSize:11, color:'var(--accent-amber)', marginTop:4 }}>{fundError}</p>}
+              </div>
+
+              <div>
+                <p className="label" style={{ marginBottom:5 }}>
+                  基金名稱
+                  {!fundLooking && form.unit_price && <span style={{ color:'var(--profit)', marginLeft:6, fontSize:10 }}>✓ 已自動帶入淨值</span>}
+                </p>
+                <input className="input" placeholder="例：國泰中小成長基金" value={form.fund_name}
+                  onChange={e=>set('fund_name',e.target.value)} />
+              </div>
+
+              <div>
+                <p className="label" style={{ marginBottom:5 }}>單位數 <span style={{ color:'var(--accent-blue)' }}>*</span></p>
+                <input className="input" type="number" placeholder="0" step="0.001" value={form.quantity}
+                  onChange={e=>set('quantity',e.target.value)} />
+              </div>
+
+              <div>
+                <p className="label" style={{ marginBottom:5 }}>
+                  成本價（每單位）<span style={{ color:'var(--accent-blue)' }}>*</span>
+                </p>
+                <input className="input" type="number" placeholder="自動帶入淨值，可手動修改" step="0.01" value={form.unit_price}
+                  onChange={e=>set('unit_price',e.target.value)} />
+                <p style={{ fontSize:11, color:'var(--text-muted)', marginTop:3 }}>輸入代碼後自動抓取最新淨值，亦可手動填入買入成本</p>
+              </div>
+
+              {form.quantity && form.unit_price && (
+                <div style={{ background:'var(--bg-input)', borderRadius:'var(--radius-md)', padding:'10px 14px',
+                  display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+                  <span style={{ fontSize:13, color:'var(--text-secondary)' }}>總成本</span>
+                  <span className="text-mono" style={{ fontSize:15, fontWeight:600 }}>
+                    {(Number(form.quantity) * Number(form.unit_price)).toLocaleString('zh-TW', { maximumFractionDigits:0 })}
+                  </span>
+                </div>
+              )}
+            </>
+          ) : (
+            /* ── 股票/ETF 原有欄位 ── */
+            <>
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+                <div>
+                  <p className="label" style={{ marginBottom:5 }}>市場</p>
+                  <select className="input" value={form.market} onChange={e=>{ set('market',e.target.value); trigger(form.symbol, e.target.value) }}>
+                    {['TW','US','JP','CRYPTO'].map(m=><option key={m} value={m}>{MARKET_LABELS[m]}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <p className="label" style={{ marginBottom:5 }}>代號 <span style={{ color:'var(--accent-blue)' }}>*</span></p>
+                  <div style={{ position:'relative' }}>
+                    <input className="input" placeholder="例：0050" value={form.symbol}
+                      onChange={e=>{ set('symbol',e.target.value); trigger(e.target.value, form.market) }}
+                      style={{ paddingRight: looking ? 36 : 14 }} autoFocus />
+                    {looking && <div style={{ position:'absolute', right:10, top:'50%', transform:'translateY(-50%)' }}>
+                      <RefreshCw size={14} color="var(--accent-blue)" style={{ animation:'spin 1s linear infinite' }}/>
+                    </div>}
+                  </div>
+                </div>
+              </div>
+              <div>
+                <p className="label" style={{ marginBottom:5 }}>
+                  名稱
+                  {looking && <span style={{ color:'var(--accent-blue)', marginLeft:6, fontSize:10 }}>查詢中...</span>}
+                  {!looking && form.name && <span style={{ color:'var(--profit)', marginLeft:6, fontSize:10 }}>✓ 已自動帶入</span>}
+                </p>
+                <input className="input" placeholder="例：元大台灣50" value={form.name} onChange={e=>set('name',e.target.value)} />
+                {error && <p style={{ fontSize:11, color:'var(--accent-amber)', marginTop:4 }}>{error}</p>}
+              </div>
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+                <div>
+                  <p className="label" style={{ marginBottom:5 }}>股數 <span style={{ color:'var(--accent-blue)' }}>*</span></p>
+                  <input className="input" type="number" placeholder="0" step="0.00001" value={form.quantity} onChange={e=>set('quantity',e.target.value)} />
+                </div>
+                <div>
+                  <p className="label" style={{ marginBottom:5 }}>總成本 <span style={{ color:'var(--accent-blue)' }}>*</span></p>
+                  <input className="input" type="number" placeholder="0" value={form.total_cost} onChange={e=>set('total_cost',e.target.value)} />
+                </div>
+              </div>
+              <div style={{ background:'var(--bg-input)', borderRadius:'var(--radius-md)', padding:'10px 14px', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+                <span style={{ fontSize:13, color:'var(--text-secondary)' }}>均價（自動計算）</span>
+                <span className="text-mono" style={{ fontSize:15, fontWeight:600, color:avgCost?'var(--text-primary)':'var(--text-muted)' }}>
+                  {avgCost ? formatPrice(avgCost) : '—'}
+                </span>
+              </div>
+            </>
+          )}
+
           <button className="btn btn-primary" style={{ width:'100%', marginTop:4 }}
-            onClick={save} disabled={saving||!form.symbol||!form.quantity||!form.total_cost}>
+            onClick={save} disabled={saving || (isFund ? !fundCanSave : !stockCanSave) || filteredAccounts.length===0}>
             {saving?'儲存中...':'新增持倉'}
           </button>
           </div>
