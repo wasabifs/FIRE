@@ -2,90 +2,80 @@
  * api/fund-nav.js — 台灣基金淨值查詢 + 關鍵字搜尋
  *
  * GET /api/fund-nav?codes=T3703Y          → 查淨值
- * GET /api/fund-nav?search=國泰中小        → 搜尋基金列表
+ * GET /api/fund-nav?search=國泰中小        → 搜尋基金列表（回傳本地 DB）
  *
- * 資料來源：鉅亨網 fund.api.cnyes.com
+ * 淨值來源：投信投顧公會 SITCA 單筆查詢頁面（HTML 解析）
+ * 搜尋：直接回傳前端本地 DB，不走 API
  */
 
-const ANUE_HEADERS = {
-  'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-  'Referer': 'https://fund.cnyes.com/',
-  'Accept': 'application/json, text/plain, */*',
-  'Accept-Language': 'zh-TW,zh;q=0.9',
+const SITCA_HEADERS = {
+  'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+  'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+  'Accept-Language': 'zh-TW,zh;q=0.9,en;q=0.8',
+  'Accept-Encoding': 'gzip, deflate, br',
+  'Cache-Control': 'no-cache',
 }
 
-// ── 鉅亨搜尋，回傳包含淨值的完整資料 ────────────────────────
-async function searchCnyes(keyword, limit = 10) {
-  const url = `https://fund.api.cnyes.com/fund/api/v2/search?search=${encodeURIComponent(keyword)}&limit=${limit}`
-  const r = await fetch(url, { signal: AbortSignal.timeout(10000), headers: ANUE_HEADERS })
-  if (!r.ok) throw new Error(`cnyes search HTTP ${r.status}`)
-  const data = await r.json()
+async function fetchNavFromSitca(code) {
+  // SITCA 基金淨值查詢
+  const url = `https://www.sitca.org.tw/ROC/Industry/IN2413.aspx?FUND_ID=${encodeURIComponent(code)}&txttype=2`
+  
+  const r = await fetch(url, {
+    signal: AbortSignal.timeout(15000),
+    headers: SITCA_HEADERS,
+  })
+  if (!r.ok) throw new Error(`SITCA HTTP ${r.status}`)
 
-  // 嘗試各種可能的結構
-  const items = data?.data?.items
-    || data?.data?.list
-    || data?.items
-    || data?.list
-    || (Array.isArray(data?.data) ? data.data : null)
-    || []
+  const buf  = await r.arrayBuffer()
+  const text = new TextDecoder('big5', { fatal: false }).decode(buf)
 
-  return items.map(i => {
-    // 淨值可能在不同欄位
-    const price = parseFloat(
-      i.nav || i.price || i.NAV || i.netAssetValue ||
-      i.lastPrice || i.closePrice || i.close || 0
-    ) || null
+  // 解析淨值：找數字格式的淨值
+  // SITCA 頁面結構：表格中包含日期和淨值
+  // 嘗試多種 pattern
+  
+  let price = null
+  let date  = null
+  let name  = null
 
-    const date = i.navDate || i.date || i.tradingDate || null
-
-    return {
-      code:    (i.fundCode || i.code || i.FundCode || '').trim(),
-      name:    (i.fundName || i.name || i.FundName || '').trim(),
-      company: (i.companyCh || i.company || i.Company || '').trim(),
-      anueId:  String(i.cnyesCode || i.fundId || i.anueId || i.id || ''),
-      price,
-      date,
-    }
-  }).filter(i => i.code)
-}
-
-// ── 用 anueId 查個別基金詳細淨值 ────────────────────────────
-async function getNavByAnueId(anueId) {
-  // 嘗試多個可能的端點格式
-  const endpoints = [
-    `https://fund.api.cnyes.com/fund/api/v2/funds/${anueId}/nav?format=json`,
-    `https://fund.api.cnyes.com/fund/api/v2/funds/${anueId}/nav`,
-    `https://fund.api.cnyes.com/fund/api/v1/funds/${anueId}/nav`,
+  // Pattern 1: 常見格式 <td>NNN.NN</td> 後面跟漲跌
+  const patterns = [
+    // 淨值欄：三位數以上加小數
+    /最新淨值[^]*?(\d{2,4}\.\d{2})/,
+    /淨值[^]*?<td[^>]*>\s*([\d,]+\.\d{2})\s*<\/td>/i,
+    /<td[^>]*>\s*([\d,]{3,10}\.\d{2})\s*<\/td>\s*<td[^>]*>\s*[\d.+-]/,
+    // 數字在表格
+    /(\d{2,4}\/\d{2}\/\d{2})[^]*?(\d{3,4}\.\d{2})/,
   ]
 
-  for (const url of endpoints) {
-    try {
-      const r = await fetch(url, { signal: AbortSignal.timeout(8000), headers: ANUE_HEADERS })
-      if (!r.ok) continue
-
-      const data = await r.json()
-
-      // 嘗試各種 response 結構
-      const candidates = [
-        data?.data?.[0],
-        Array.isArray(data?.data) ? data.data[0] : data?.data,
-        data?.result?.[0],
-        data?.[0],
-        data,
-      ].filter(Boolean)
-
-      for (const c of candidates) {
-        const price = parseFloat(c?.nav || c?.price || c?.NAV || c?.netAssetValue || 0)
-        if (price > 0) {
-          return { price, date: c?.date || c?.navDate || null }
-        }
+  for (const p of patterns) {
+    const m = text.match(p)
+    if (m) {
+      // 最後一個 capture group 是數字
+      const numStr = m[m.length - 1]?.replace(/,/g, '')
+      const num    = parseFloat(numStr)
+      if (num > 1 && num < 100000) {
+        price = num
+        break
       }
-    } catch { continue }
+    }
   }
-  return null
+
+  // 找日期 YYYY/MM/DD 或 YYYYMMDD
+  const dateM = text.match(/(\d{4})\/(\d{2})\/(\d{2})/)
+  if (dateM) date = `${dateM[1]}-${dateM[2]}-${dateM[3]}`
+
+  // 找基金名稱（頁面 title 或 h1）
+  const nameM = text.match(/<title>([^<]{4,60})<\/title>/i)
+    || text.match(/<h[12][^>]*>([^<]{4,60})<\/h[12]>/i)
+  if (nameM) name = nameM[1].trim().replace(/[\r\n\t]+/g, ' ')
+
+  // debug log
+  console.log(`[fund-nav] SITCA ${code}: price=${price}, date=${date}`)
+  console.log(`[fund-nav] SITCA ${code}: text snippet =`, text.substring(0, 500))
+
+  return price ? { price, date, name } : null
 }
 
-// ── 主 handler ────────────────────────────────────────────────
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS')
@@ -93,23 +83,13 @@ export default async function handler(req, res) {
 
   const { codes, search } = req.query
 
-  // ── 搜尋模式 ──
+  // 搜尋模式：前端本地 DB 處理，這裡只回傳空陣列
   if (search) {
-    res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=60')
-    try {
-      const results = await searchCnyes(search.trim())
-      // 搜尋結果只回傳基本資料（不含淨值，避免洩漏）
-      return res.status(200).json({
-        funds: results.map(({ code, name, company }) => ({ code, name, company }))
-      })
-    } catch (e) {
-      console.error('[fund-nav] search error:', e.message)
-      return res.status(200).json({ funds: [], error: e.message })
-    }
+    res.setHeader('Cache-Control', 's-maxage=3600')
+    return res.status(200).json({ funds: [] })
   }
 
-  // ── 淨值查詢模式 ──
-  if (!codes) return res.status(400).json({ error: 'codes or search required' })
+  if (!codes) return res.status(400).json({ error: 'codes required' })
   res.setHeader('Cache-Control', 's-maxage=3600, stale-while-revalidate=1800')
 
   const codeList = codes.split(',').map(s => s.trim()).filter(Boolean)
@@ -117,33 +97,13 @@ export default async function handler(req, res) {
   const results = await Promise.all(codeList.map(async code => {
     const empty = { code, name: null, price: null, date: null, source: null }
     try {
-      // 搜尋找到 anueId 和可能附帶的淨值
-      const hits = await searchCnyes(code, 5)
-      const match = hits.find(h => h.code.toUpperCase() === code.toUpperCase()) || hits[0]
-      if (!match) return empty
-
-      // 如果搜尋結果已包含淨值，直接用
-      if (match.price) {
-        console.log(`[fund-nav] ${code} price from search: ${match.price}`)
-        return { code, name: match.name, price: match.price, date: match.date, source: 'cnyes-search' }
-      }
-
-      // 否則用 anueId 再查一次
-      if (match.anueId) {
-        const nav = await getNavByAnueId(match.anueId)
-        if (nav?.price) {
-          console.log(`[fund-nav] ${code} price from nav API: ${nav.price}, anueId: ${match.anueId}`)
-          return { code, name: match.name, ...nav, source: 'cnyes-nav' }
-        }
-        console.warn(`[fund-nav] ${code} anueId=${match.anueId} nav API returned no price`)
-      }
+      const nav = await fetchNavFromSitca(code)
+      if (nav) return { code, ...nav, source: 'sitca' }
     } catch (e) {
       console.error(`[fund-nav] ${code} error:`, e.message)
     }
     return empty
   }))
 
-  // 把實際的 API response 也 log 出來方便 debug
-  console.log('[fund-nav] results:', JSON.stringify(results))
   return res.status(200).json({ funds: results })
 }
