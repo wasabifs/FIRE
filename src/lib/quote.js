@@ -1,7 +1,9 @@
 /**
  * 股價與標的名稱查詢
- * 全部走 /api/quote serverless
+ * 股票/ETF/加密 走 /api/quote serverless
+ * 基金 走 /api/fund-nav serverless
  */
+import { fetchFundNavs } from './fundQuote'
 
 const PRICE_CACHE = {}
 const NAME_CACHE  = {}
@@ -45,6 +47,17 @@ export async function fetchQuotes(holdings) {
 
   if (toFetch.length === 0) return prices
 
+  // ── 基金：走 fund-nav API ──────────────────────────────
+  const fundHoldings = toFetch.filter(h => h.market === 'FUND')
+  if (fundHoldings.length > 0) {
+    const fundPrices = await fetchFundNavs(fundHoldings)
+    Object.assign(prices, fundPrices)
+    for (const [key, price] of Object.entries(fundPrices)) {
+      PRICE_CACHE[key] = { price, ts: now }
+    }
+  }
+
+  // ── 股票/ETF：走 quote API ─────────────────────────────
   const supported = toFetch.filter(h => ['TW', 'US', 'JP'].includes(h.market))
   if (supported.length === 0) return prices
 
