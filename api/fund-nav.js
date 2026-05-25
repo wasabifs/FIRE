@@ -4,56 +4,85 @@
  * GET /api/fund-nav?codes=T3703Y          → 查淨值
  * GET /api/fund-nav?search=國泰中小        → 搜尋基金列表
  *
- * 資料來源：
- *   搜尋：鉅亨網 search API
- *   淨值：鉅亨網（搜尋取得 anueId 後查詢）
- *
- * 本地代碼對照表（避免每次都要搜尋）
+ * 資料來源：鉅亨網 fund.api.cnyes.com
  */
 
-// 代碼 → 鉅亨內部 ID 對照（從搜尋結果預先建立）
-const CODE_TO_ANUE = {
-  'T3703Y': null,  // 動態查詢
-  'T3707Y': null,
-  'T3201Y': 'A32001',  // 野村優質基金（已知）
-  'T3207Y': null,
-  'T3604Y': null,
-}
-
 const ANUE_HEADERS = {
-  'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+  'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
   'Referer': 'https://fund.cnyes.com/',
-  'Accept': 'application/json',
+  'Accept': 'application/json, text/plain, */*',
+  'Accept-Language': 'zh-TW,zh;q=0.9',
 }
 
-// ── 鉅亨搜尋（回傳含 anueId）────────────────────────────────
-async function searchCnyes(keyword) {
-  const url = `https://fund.api.cnyes.com/fund/api/v2/search?search=${encodeURIComponent(keyword)}&limit=10`
-  const r = await fetch(url, { signal: AbortSignal.timeout(8000), headers: ANUE_HEADERS })
-  if (!r.ok) return []
+// ── 鉅亨搜尋，回傳包含淨值的完整資料 ────────────────────────
+async function searchCnyes(keyword, limit = 10) {
+  const url = `https://fund.api.cnyes.com/fund/api/v2/search?search=${encodeURIComponent(keyword)}&limit=${limit}`
+  const r = await fetch(url, { signal: AbortSignal.timeout(10000), headers: ANUE_HEADERS })
+  if (!r.ok) throw new Error(`cnyes search HTTP ${r.status}`)
   const data = await r.json()
-  const items = data?.data?.items || data?.items || []
-  return items.map(i => ({
-    code:    (i.fundCode || i.code || '').trim(),
-    name:    (i.fundName || i.name || '').trim(),
-    company: (i.companyCh || i.company || '').trim(),
-    anueId:  String(i.cnyesCode || i.fundId || i.id || ''),
-  })).filter(i => i.code)
+
+  // 嘗試各種可能的結構
+  const items = data?.data?.items
+    || data?.data?.list
+    || data?.items
+    || data?.list
+    || (Array.isArray(data?.data) ? data.data : null)
+    || []
+
+  return items.map(i => {
+    // 淨值可能在不同欄位
+    const price = parseFloat(
+      i.nav || i.price || i.NAV || i.netAssetValue ||
+      i.lastPrice || i.closePrice || i.close || 0
+    ) || null
+
+    const date = i.navDate || i.date || i.tradingDate || null
+
+    return {
+      code:    (i.fundCode || i.code || i.FundCode || '').trim(),
+      name:    (i.fundName || i.name || i.FundName || '').trim(),
+      company: (i.companyCh || i.company || i.Company || '').trim(),
+      anueId:  String(i.cnyesCode || i.fundId || i.anueId || i.id || ''),
+      price,
+      date,
+    }
+  }).filter(i => i.code)
 }
 
-// ── 鉅亨取淨值（用 anueId）───────────────────────────────────
+// ── 用 anueId 查個別基金詳細淨值 ────────────────────────────
 async function getNavByAnueId(anueId) {
-  const url = `https://fund.api.cnyes.com/fund/api/v2/funds/${anueId}/nav?format=json`
-  const r = await fetch(url, { signal: AbortSignal.timeout(8000), headers: ANUE_HEADERS })
-  if (!r.ok) return null
-  const data = await r.json()
-  // 各種可能的資料結構
-  const d = data?.data
-  const nav = Array.isArray(d) ? d[0] : (d || null)
-  if (!nav) return null
-  const price = parseFloat(nav.nav || nav.price || nav.NAV || nav.netAssetValue || 0)
-  const date  = nav.date || nav.navDate || null
-  return price > 0 ? { price, date } : null
+  // 嘗試多個可能的端點格式
+  const endpoints = [
+    `https://fund.api.cnyes.com/fund/api/v2/funds/${anueId}/nav?format=json`,
+    `https://fund.api.cnyes.com/fund/api/v2/funds/${anueId}/nav`,
+    `https://fund.api.cnyes.com/fund/api/v1/funds/${anueId}/nav`,
+  ]
+
+  for (const url of endpoints) {
+    try {
+      const r = await fetch(url, { signal: AbortSignal.timeout(8000), headers: ANUE_HEADERS })
+      if (!r.ok) continue
+
+      const data = await r.json()
+
+      // 嘗試各種 response 結構
+      const candidates = [
+        data?.data?.[0],
+        Array.isArray(data?.data) ? data.data[0] : data?.data,
+        data?.result?.[0],
+        data?.[0],
+        data,
+      ].filter(Boolean)
+
+      for (const c of candidates) {
+        const price = parseFloat(c?.nav || c?.price || c?.NAV || c?.netAssetValue || 0)
+        if (price > 0) {
+          return { price, date: c?.date || c?.navDate || null }
+        }
+      }
+    } catch { continue }
+  }
+  return null
 }
 
 // ── 主 handler ────────────────────────────────────────────────
@@ -69,8 +98,12 @@ export default async function handler(req, res) {
     res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=60')
     try {
       const results = await searchCnyes(search.trim())
-      return res.status(200).json({ funds: results })
+      // 搜尋結果只回傳基本資料（不含淨值，避免洩漏）
+      return res.status(200).json({
+        funds: results.map(({ code, name, company }) => ({ code, name, company }))
+      })
     } catch (e) {
+      console.error('[fund-nav] search error:', e.message)
       return res.status(200).json({ funds: [], error: e.message })
     }
   }
@@ -83,21 +116,34 @@ export default async function handler(req, res) {
 
   const results = await Promise.all(codeList.map(async code => {
     const empty = { code, name: null, price: null, date: null, source: null }
-
     try {
-      // 先搜尋取得 anueId
-      const hits = await searchCnyes(code)
+      // 搜尋找到 anueId 和可能附帶的淨值
+      const hits = await searchCnyes(code, 5)
       const match = hits.find(h => h.code.toUpperCase() === code.toUpperCase()) || hits[0]
-      if (!match?.anueId) return empty
+      if (!match) return empty
 
-      const nav = await getNavByAnueId(match.anueId)
-      if (nav) return { code, name: match.name, ...nav, source: 'cnyes' }
+      // 如果搜尋結果已包含淨值，直接用
+      if (match.price) {
+        console.log(`[fund-nav] ${code} price from search: ${match.price}`)
+        return { code, name: match.name, price: match.price, date: match.date, source: 'cnyes-search' }
+      }
+
+      // 否則用 anueId 再查一次
+      if (match.anueId) {
+        const nav = await getNavByAnueId(match.anueId)
+        if (nav?.price) {
+          console.log(`[fund-nav] ${code} price from nav API: ${nav.price}, anueId: ${match.anueId}`)
+          return { code, name: match.name, ...nav, source: 'cnyes-nav' }
+        }
+        console.warn(`[fund-nav] ${code} anueId=${match.anueId} nav API returned no price`)
+      }
     } catch (e) {
-      console.error(`[fund-nav] error for ${code}:`, e.message)
+      console.error(`[fund-nav] ${code} error:`, e.message)
     }
-
     return empty
   }))
 
+  // 把實際的 API response 也 log 出來方便 debug
+  console.log('[fund-nav] results:', JSON.stringify(results))
   return res.status(200).json({ funds: results })
 }
