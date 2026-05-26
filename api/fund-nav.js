@@ -1,80 +1,79 @@
 /**
  * api/fund-nav.js — 台灣基金淨值查詢
- * GET /api/fund-nav?codes=T3703Y
- * GET /api/fund-nav?debug=1&codes=T3703Y  → 回傳完整 Yahoo response 供 debug
+ * GET /api/fund-nav?codes=T3703Y,T3201Y
+ *
+ * 資料來源：Morningstar 公開 API（不需要 API key）
+ * SecId 即 Yahoo symbol 去掉 :FO
  */
 
-const CODE_TO_YAHOO = {
-  'T3703Y': 'F0HKG05WWH:FO',
-  'T3707Y': 'F0HKG05WWI:FO',
-  'T3201Y': 'F0HKG05X20:FO',
-  'T3207Y': 'F0HKG05WXW:FO',
-  'T3604Y': 'F0HKG05X22:FO',
+// T代碼 → Morningstar SecId 對照
+const CODE_TO_SECID = {
+  'T3703Y': 'F0HKG05WWH',  // 國泰中小成長基金-新台幣
+  'T3707Y': 'F0HKG05WWI',  // 國泰科技生化基金
+  'T3201Y': 'F0HKG05X20',  // 野村優質基金-累積類型新臺幣
+  'T3207Y': 'F0HKG05WXW',  // 野村中小基金-累積類型
+  'T3604Y': 'F0HKG05X22',  // 安聯台灣科技基金
 }
 
-const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
+const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
 
-let _crumb = null, _cookie = '', _crumbTs = 0
-const CRUMB_TTL = 50 * 60 * 1000
+async function fetchMorningstarNav(secId) {
+  // Morningstar 公開 screener API，用 SecId 查最新淨值
+  const url = `https://lt.morningstar.com/api/rest.svc/9vehuxllxs/security/screener?page=1&pageSize=1&sortOrder=LegalName%20asc&outputType=json&version=1&languageId=zh-TW&currencyId=TWD&universeIds=FOTW%24%24ALL&securityDataPoints=SecId%2CLegalName%2CClosePrice%2CClosePriceDate%2CPriceCurrency&filters=SecId%3AIN%3A${secId}`
 
-async function getYahooCrumb() {
-  if (_crumb && Date.now() - _crumbTs < CRUMB_TTL) return { crumb: _crumb, cookie: _cookie }
-  const r1 = await fetch('https://fc.yahoo.com', {
-    signal: AbortSignal.timeout(8000),
-    headers: { 'User-Agent': UA }, redirect: 'follow',
-  })
-  _cookie = (r1.headers.get('set-cookie') || '').split(',').map(s => s.split(';')[0]).join('; ')
-  const r2 = await fetch('https://query2.finance.yahoo.com/v1/test/getcrumb', {
-    signal: AbortSignal.timeout(8000),
-    headers: { 'User-Agent': UA, 'Cookie': _cookie },
-  })
-  const crumb = (await r2.text()).trim()
-  if (crumb && crumb.length > 2 && !crumb.includes('<')) {
-    _crumb = crumb; _crumbTs = Date.now()
-  }
-  console.log('[fund-nav] crumb ok:', !!_crumb)
-  return { crumb: _crumb, cookie: _cookie }
-}
-
-async function fetchYahooRaw(yahooSymbol) {
-  const { crumb, cookie } = await getYahooCrumb()
-  const sym = encodeURIComponent(yahooSymbol)
-  const url = `https://query2.finance.yahoo.com/v8/finance/chart/${sym}?interval=1d&range=5d${crumb ? `&crumb=${encodeURIComponent(crumb)}` : ''}`
   const r = await fetch(url, {
-    signal: AbortSignal.timeout(10000),
-    headers: { 'User-Agent': UA, 'Accept': 'application/json', 'Cookie': cookie },
+    signal: AbortSignal.timeout(12000),
+    headers: {
+      'User-Agent': UA,
+      'Accept': 'application/json, text/plain, */*',
+      'Referer': 'https://tw.morningstar.com/',
+      'Origin': 'https://tw.morningstar.com',
+    },
   })
-  console.log(`[fund-nav] chart ${yahooSymbol} HTTP ${r.status}`)
-  const text = await r.text()
-  // 只 log 前 500 字，避免 log 太大
-  console.log(`[fund-nav] chart body:`, text.substring(0, 500))
-  if (!r.ok) throw new Error(`Yahoo HTTP ${r.status}`)
-  return JSON.parse(text)
-}
 
-function extractPrice(data) {
-  // 嘗試各種可能的 response 結構
-  const result = data?.chart?.result?.[0]
-  if (!result) return null
+  console.log(`[fund-nav] Morningstar ${secId} HTTP ${r.status}`)
+  if (!r.ok) throw new Error(`Morningstar HTTP ${r.status}`)
 
-  const meta = result.meta || {}
-  // 基金淨值通常在 regularMarketPrice
-  const candidates = [
-    meta.regularMarketPrice,
-    meta.previousClose,
-    meta.chartPreviousClose,
-    result.indicators?.quote?.[0]?.close?.filter(Boolean)?.slice(-1)?.[0],
-    result.indicators?.adjclose?.[0]?.adjclose?.filter(Boolean)?.slice(-1)?.[0],
-  ]
-  console.log('[fund-nav] price candidates:', JSON.stringify(candidates))
+  const data = await r.json()
+  console.log(`[fund-nav] Morningstar ${secId} body:`, JSON.stringify(data).substring(0, 300))
 
-  const price = candidates.find(v => v != null && v > 0)
-  const date  = meta.regularMarketTime
-    ? new Date(meta.regularMarketTime * 1000).toISOString().slice(0, 10)
-    : null
-  const name  = meta.longName || meta.shortName || null
+  const rows = data?.rows || data?.results || []
+  const row  = rows[0]
+  if (!row) return null
+
+  const price = parseFloat(row.ClosePrice || row.closePrice || row.NAV || 0) || null
+  const date  = row.ClosePriceDate || row.closePriceDate || null
+  const name  = row.LegalName || row.legalName || null
 
   return price ? { price, date, name } : null
+}
+
+// fallback: 用 Morningstar 歷史 NAV API
+async function fetchMorningstarNavHistory(secId) {
+  const today = new Date().toISOString().slice(0, 10)
+  const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10)
+
+  const url = `https://lt.morningstar.com/api/rest.svc/9vehuxllxs/security_details/${secId}/performance/nav?currencyId=TWD&idtype=msid&frequency=daily&startDate=${weekAgo}&endDate=${today}&outputType=json`
+
+  const r = await fetch(url, {
+    signal: AbortSignal.timeout(12000),
+    headers: { 'User-Agent': UA, 'Referer': 'https://tw.morningstar.com/' },
+  })
+
+  console.log(`[fund-nav] MS history ${secId} HTTP ${r.status}`)
+  if (!r.ok) return null
+
+  const data  = await r.json()
+  const navs  = data?.navs || data?.Nav || data?.data || []
+  const last  = Array.isArray(navs) ? navs[navs.length - 1] : null
+
+  if (!last) return null
+
+  const price = parseFloat(last.nav || last.NAV || last.value || last[1] || 0) || null
+  const date  = last.date || last.Date || null
+
+  console.log(`[fund-nav] MS history ${secId}: price=${price}`)
+  return price ? { price, date, name: null } : null
 }
 
 export default async function handler(req, res) {
@@ -82,7 +81,7 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS')
   if (req.method === 'OPTIONS') return res.status(200).end()
 
-  const { codes, search, debug } = req.query
+  const { codes, search } = req.query
 
   if (search) {
     res.setHeader('Cache-Control', 's-maxage=3600')
@@ -90,26 +89,31 @@ export default async function handler(req, res) {
   }
 
   if (!codes) return res.status(400).json({ error: 'codes required' })
-  res.setHeader('Cache-Control', 'no-store') // debug 期間關快取
+  res.setHeader('Cache-Control', 'no-store')  // debug 期間不快取
 
   const codeList = codes.split(',').map(s => s.trim()).filter(Boolean)
 
   const results = await Promise.all(codeList.map(async code => {
     const empty = { code, name: null, price: null, date: null, source: null }
+    const secId = CODE_TO_SECID[code.toUpperCase()]
+    if (!secId) { console.warn(`[fund-nav] no secId for ${code}`); return empty }
+
     try {
-      const yahooSym = CODE_TO_YAHOO[code.toUpperCase()]
-      if (!yahooSym) return empty
-
-      const data = await fetchYahooRaw(yahooSym)
-
-      // debug 模式：回傳完整 response
-      if (debug) return { code, yahooSym, raw: data }
-
-      const nav = extractPrice(data)
-      if (nav) return { code, ...nav, source: 'yahoo' }
+      // 先試 screener API
+      const nav = await fetchMorningstarNav(secId)
+      if (nav?.price) return { code, ...nav, source: 'morningstar' }
     } catch (e) {
-      console.error(`[fund-nav] ${code} error:`, e.message)
+      console.error(`[fund-nav] screener error ${code}:`, e.message)
     }
+
+    try {
+      // fallback: history API
+      const nav = await fetchMorningstarNavHistory(secId)
+      if (nav?.price) return { code, ...nav, source: 'morningstar-history' }
+    } catch (e) {
+      console.error(`[fund-nav] history error ${code}:`, e.message)
+    }
+
     return empty
   }))
 
