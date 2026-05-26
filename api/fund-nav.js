@@ -2,78 +2,94 @@
  * api/fund-nav.js — 台灣基金淨值查詢
  * GET /api/fund-nav?codes=T3703Y,T3201Y
  *
- * 資料來源：Morningstar 公開 API（不需要 API key）
- * SecId 即 Yahoo symbol 去掉 :FO
+ * 策略：抓 Yahoo 台灣股市基金頁面的 __NEXT_DATA__ JSON
+ * URL: https://tw.stock.yahoo.com/fund/summary/F0HKG05WWH:FO
  */
 
-// T代碼 → Morningstar SecId 對照
 const CODE_TO_SECID = {
-  'T3703Y': 'F0HKG05WWH',  // 國泰中小成長基金-新台幣
-  'T3707Y': 'F0HKG05WWI',  // 國泰科技生化基金
-  'T3201Y': 'F0HKG05X20',  // 野村優質基金-累積類型新臺幣
-  'T3207Y': 'F0HKG05WXW',  // 野村中小基金-累積類型
-  'T3604Y': 'F0HKG05X22',  // 安聯台灣科技基金
+  'T3703Y': 'F0HKG05WWH',
+  'T3707Y': 'F0HKG05WWI',
+  'T3201Y': 'F0HKG05X20',
+  'T3207Y': 'F0HKG05WXW',
+  'T3604Y': 'F0HKG05X22',
 }
 
-const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
+const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
 
-async function fetchMorningstarNav(secId) {
-  // Morningstar 公開 screener API，用 SecId 查最新淨值
-  const url = `https://lt.morningstar.com/api/rest.svc/9vehuxllxs/security/screener?page=1&pageSize=1&sortOrder=LegalName%20asc&outputType=json&version=1&languageId=zh-TW&currencyId=TWD&universeIds=FOTW%24%24ALL&securityDataPoints=SecId%2CLegalName%2CClosePrice%2CClosePriceDate%2CPriceCurrency&filters=SecId%3AIN%3A${secId}`
+async function fetchYahooTWFund(secId) {
+  const symbol = `${secId}:FO`
+  const url = `https://tw.stock.yahoo.com/fund/summary/${encodeURIComponent(symbol)}`
 
   const r = await fetch(url, {
-    signal: AbortSignal.timeout(12000),
+    signal: AbortSignal.timeout(15000),
     headers: {
       'User-Agent': UA,
-      'Accept': 'application/json, text/plain, */*',
-      'Referer': 'https://tw.morningstar.com/',
-      'Origin': 'https://tw.morningstar.com',
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      'Accept-Language': 'zh-TW,zh;q=0.9',
+      'Cache-Control': 'no-cache',
     },
   })
 
-  console.log(`[fund-nav] Morningstar ${secId} HTTP ${r.status}`)
-  if (!r.ok) throw new Error(`Morningstar HTTP ${r.status}`)
+  console.log(`[fund-nav] Yahoo TW ${symbol} HTTP ${r.status}`)
+  if (!r.ok) throw new Error(`Yahoo TW HTTP ${r.status}`)
 
-  const data = await r.json()
-  console.log(`[fund-nav] Morningstar ${secId} body:`, JSON.stringify(data).substring(0, 300))
+  const html = await r.text()
 
-  const rows = data?.rows || data?.results || []
-  const row  = rows[0]
-  if (!row) return null
+  // 從 __NEXT_DATA__ 取資料
+  const nextDataMatch = html.match(/<script id="__NEXT_DATA__" type="application\/json">([^<]+)<\/script>/)
+  if (nextDataMatch) {
+    try {
+      const nextData = JSON.parse(nextDataMatch[1])
+      // 深入找基金淨值
+      const str = JSON.stringify(nextData)
 
-  const price = parseFloat(row.ClosePrice || row.closePrice || row.NAV || 0) || null
-  const date  = row.ClosePriceDate || row.closePriceDate || null
-  const name  = row.LegalName || row.legalName || null
+      // 找 ClosePrice 或 regularMarketPrice
+      const priceMatch = str.match(/"ClosePrice"\s*:\s*([0-9.]+)/) ||
+                         str.match(/"closePrice"\s*:\s*([0-9.]+)/) ||
+                         str.match(/"regularMarketPrice"\s*:\s*([0-9.]+)/) ||
+                         str.match(/"nav"\s*:\s*([0-9.]+)/)
 
-  return price ? { price, date, name } : null
-}
+      const dateMatch = str.match(/"ClosePriceDate"\s*:\s*"([^"]+)"/) ||
+                        str.match(/"closePriceDate"\s*:\s*"([^"]+)"/)
 
-// fallback: 用 Morningstar 歷史 NAV API
-async function fetchMorningstarNavHistory(secId) {
-  const today = new Date().toISOString().slice(0, 10)
-  const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10)
+      const nameMatch = str.match(/"LegalName"\s*:\s*"([^"]+)"/) ||
+                        str.match(/"legalName"\s*:\s*"([^"]+)"/) ||
+                        str.match(/"longName"\s*:\s*"([^"]+)"/)
 
-  const url = `https://lt.morningstar.com/api/rest.svc/9vehuxllxs/security_details/${secId}/performance/nav?currencyId=TWD&idtype=msid&frequency=daily&startDate=${weekAgo}&endDate=${today}&outputType=json`
+      const price = priceMatch ? parseFloat(priceMatch[1]) : null
+      const date  = dateMatch ? dateMatch[1] : null
+      const name  = nameMatch ? nameMatch[1] : null
 
-  const r = await fetch(url, {
-    signal: AbortSignal.timeout(12000),
-    headers: { 'User-Agent': UA, 'Referer': 'https://tw.morningstar.com/' },
-  })
+      console.log(`[fund-nav] NEXT_DATA ${symbol}: price=${price}, name=${name}`)
+      if (price) return { price, date, name }
+    } catch (e) {
+      console.error('[fund-nav] NEXT_DATA parse error:', e.message)
+    }
+  }
 
-  console.log(`[fund-nav] MS history ${secId} HTTP ${r.status}`)
-  if (!r.ok) return null
+  // fallback: 直接從 HTML 抓淨值數字
+  // Yahoo TW 基金頁顯示格式: "193.17新台幣" 或 class 含淨值的 span
+  const patterns = [
+    /(\d{2,4}\.\d{2})\s*新台幣/,
+    /"price"\s*:\s*([0-9.]+)/,
+    /class="[^"]*price[^"]*"[^>]*>([0-9.]+)/i,
+    /淨值[^0-9]*([0-9]{2,4}\.[0-9]{2})/,
+  ]
 
-  const data  = await r.json()
-  const navs  = data?.navs || data?.Nav || data?.data || []
-  const last  = Array.isArray(navs) ? navs[navs.length - 1] : null
+  for (const p of patterns) {
+    const m = html.match(p)
+    if (m) {
+      const price = parseFloat(m[1])
+      if (price > 1 && price < 100000) {
+        console.log(`[fund-nav] HTML pattern ${symbol}: price=${price}`)
+        return { price, date: null, name: null }
+      }
+    }
+  }
 
-  if (!last) return null
-
-  const price = parseFloat(last.nav || last.NAV || last.value || last[1] || 0) || null
-  const date  = last.date || last.Date || null
-
-  console.log(`[fund-nav] MS history ${secId}: price=${price}`)
-  return price ? { price, date, name: null } : null
+  // log 前 1000 字 HTML 幫助 debug
+  console.log(`[fund-nav] ${symbol} HTML snippet:`, html.substring(0, 1000))
+  return null
 }
 
 export default async function handler(req, res) {
@@ -89,31 +105,21 @@ export default async function handler(req, res) {
   }
 
   if (!codes) return res.status(400).json({ error: 'codes required' })
-  res.setHeader('Cache-Control', 'no-store')  // debug 期間不快取
+  res.setHeader('Cache-Control', 'no-store')
 
   const codeList = codes.split(',').map(s => s.trim()).filter(Boolean)
 
   const results = await Promise.all(codeList.map(async code => {
     const empty = { code, name: null, price: null, date: null, source: null }
     const secId = CODE_TO_SECID[code.toUpperCase()]
-    if (!secId) { console.warn(`[fund-nav] no secId for ${code}`); return empty }
+    if (!secId) return empty
 
     try {
-      // 先試 screener API
-      const nav = await fetchMorningstarNav(secId)
-      if (nav?.price) return { code, ...nav, source: 'morningstar' }
+      const nav = await fetchYahooTWFund(secId)
+      if (nav?.price) return { code, ...nav, source: 'yahoo-tw' }
     } catch (e) {
-      console.error(`[fund-nav] screener error ${code}:`, e.message)
+      console.error(`[fund-nav] ${code} error:`, e.message)
     }
-
-    try {
-      // fallback: history API
-      const nav = await fetchMorningstarNavHistory(secId)
-      if (nav?.price) return { code, ...nav, source: 'morningstar-history' }
-    } catch (e) {
-      console.error(`[fund-nav] history error ${code}:`, e.message)
-    }
-
     return empty
   }))
 
