@@ -1,121 +1,88 @@
 /**
  * api/fund-nav.js — 台灣基金淨值查詢
- *
  * GET /api/fund-nav?codes=T3703Y
- * GET /api/fund-nav?search=...   → 前端本地 DB，這裡回空
- *
- * 淨值來源：Yahoo Finance（帶 crumb/cookie 繞過 429）
+ * GET /api/fund-nav?debug=1&codes=T3703Y  → 回傳完整 Yahoo response 供 debug
  */
 
 const CODE_TO_YAHOO = {
-  'T3703Y': 'F0HKG05WWH.FO',
-  'T3707Y': 'F0HKG05WX4.FO',
-  'T3201Y': 'F0HKG05WV1.FO',
-  'T3207Y': 'F0HKG05WV2.FO',
-  'T3604Y': 'F0HKG05WW8.FO',
+  'T3703Y': 'F0HKG05WWH:FO',
+  'T3707Y': 'F0HKG05WWI:FO',
+  'T3201Y': 'F0HKG05X20:FO',
+  'T3207Y': 'F0HKG05WXW:FO',
+  'T3604Y': 'F0HKG05X22:FO',
 }
 
-// ── 取得 Yahoo crumb + cookie ─────────────────────────────────
-let _crumbCache = null
-let _crumbTs    = 0
-const CRUMB_TTL = 55 * 60 * 1000  // 55 分鐘
+const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
+
+let _crumb = null, _cookie = '', _crumbTs = 0
+const CRUMB_TTL = 50 * 60 * 1000
 
 async function getYahooCrumb() {
-  const now = Date.now()
-  if (_crumbCache && now - _crumbTs < CRUMB_TTL) return _crumbCache
-
-  // Step1: 取 cookie
+  if (_crumb && Date.now() - _crumbTs < CRUMB_TTL) return { crumb: _crumb, cookie: _cookie }
   const r1 = await fetch('https://fc.yahoo.com', {
     signal: AbortSignal.timeout(8000),
-    headers: { 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36' },
-    redirect: 'follow',
+    headers: { 'User-Agent': UA }, redirect: 'follow',
   })
-  const cookie = r1.headers.get('set-cookie') || ''
-
-  // Step2: 用 cookie 取 crumb
-  const r2 = await fetch('https://query1.finance.yahoo.com/v1/test/getcrumb', {
+  _cookie = (r1.headers.get('set-cookie') || '').split(',').map(s => s.split(';')[0]).join('; ')
+  const r2 = await fetch('https://query2.finance.yahoo.com/v1/test/getcrumb', {
     signal: AbortSignal.timeout(8000),
-    headers: {
-      'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
-      'Cookie': cookie,
-    },
+    headers: { 'User-Agent': UA, 'Cookie': _cookie },
   })
-  const crumb = await r2.text()
-  console.log('[fund-nav] crumb:', crumb, 'cookie len:', cookie.length)
-
-  if (crumb && crumb.length > 2 && !crumb.startsWith('<')) {
-    _crumbCache = { crumb: crumb.trim(), cookie }
-    _crumbTs    = now
-    return _crumbCache
+  const crumb = (await r2.text()).trim()
+  if (crumb && crumb.length > 2 && !crumb.includes('<')) {
+    _crumb = crumb; _crumbTs = Date.now()
   }
-  return null
+  console.log('[fund-nav] crumb ok:', !!_crumb)
+  return { crumb: _crumb, cookie: _cookie }
 }
 
-// ── 查 Yahoo Finance 基金淨值 ─────────────────────────────────
-async function fetchYahooNav(yahooSymbol) {
-  const auth   = await getYahooCrumb()
-  const crumb  = auth?.crumb || ''
-  const cookie = auth?.cookie || ''
-
-  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSymbol)}?interval=1d&range=5d&crumb=${encodeURIComponent(crumb)}`
-  const r   = await fetch(url, {
+async function fetchYahooRaw(yahooSymbol) {
+  const { crumb, cookie } = await getYahooCrumb()
+  const sym = encodeURIComponent(yahooSymbol)
+  const url = `https://query2.finance.yahoo.com/v8/finance/chart/${sym}?interval=1d&range=5d${crumb ? `&crumb=${encodeURIComponent(crumb)}` : ''}`
+  const r = await fetch(url, {
     signal: AbortSignal.timeout(10000),
-    headers: {
-      'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
-      'Accept': 'application/json',
-      'Cookie': cookie,
-    },
+    headers: { 'User-Agent': UA, 'Accept': 'application/json', 'Cookie': cookie },
   })
-
-  console.log(`[fund-nav] Yahoo ${yahooSymbol} HTTP ${r.status}`)
+  console.log(`[fund-nav] chart ${yahooSymbol} HTTP ${r.status}`)
+  const text = await r.text()
+  // 只 log 前 500 字，避免 log 太大
+  console.log(`[fund-nav] chart body:`, text.substring(0, 500))
   if (!r.ok) throw new Error(`Yahoo HTTP ${r.status}`)
+  return JSON.parse(text)
+}
 
-  const data   = await r.json()
+function extractPrice(data) {
+  // 嘗試各種可能的 response 結構
   const result = data?.chart?.result?.[0]
   if (!result) return null
 
-  const meta  = result.meta
-  const price = meta?.regularMarketPrice || meta?.previousClose || null
-  const date  = meta?.regularMarketTime
+  const meta = result.meta || {}
+  // 基金淨值通常在 regularMarketPrice
+  const candidates = [
+    meta.regularMarketPrice,
+    meta.previousClose,
+    meta.chartPreviousClose,
+    result.indicators?.quote?.[0]?.close?.filter(Boolean)?.slice(-1)?.[0],
+    result.indicators?.adjclose?.[0]?.adjclose?.filter(Boolean)?.slice(-1)?.[0],
+  ]
+  console.log('[fund-nav] price candidates:', JSON.stringify(candidates))
+
+  const price = candidates.find(v => v != null && v > 0)
+  const date  = meta.regularMarketTime
     ? new Date(meta.regularMarketTime * 1000).toISOString().slice(0, 10)
     : null
-  const name  = meta?.longName || meta?.shortName || null
+  const name  = meta.longName || meta.shortName || null
 
-  console.log(`[fund-nav] Yahoo ${yahooSymbol} price=${price} name=${name}`)
   return price ? { price, date, name } : null
 }
 
-// ── 用 Yahoo 搜尋找 symbol（對照表沒有時用）────────────────────
-async function searchYahooSymbol(code) {
-  const auth   = await getYahooCrumb()
-  const cookie = auth?.cookie || ''
-  const crumb  = auth?.crumb  || ''
-
-  const url = `https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(code)}&lang=zh-TW&region=TW&quotesCount=5&newsCount=0&crumb=${encodeURIComponent(crumb)}`
-  const r   = await fetch(url, {
-    signal: AbortSignal.timeout(8000),
-    headers: {
-      'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
-      'Cookie': cookie,
-    },
-  })
-  if (!r.ok) return null
-
-  const data   = await r.json()
-  const quotes = data?.quotes || []
-  const fund   = quotes.find(q => q.quoteType === 'MUTUALFUND' || q.symbol?.endsWith('.FO'))
-    || quotes[0]
-  console.log(`[fund-nav] search ${code} → ${fund?.symbol}`)
-  return fund?.symbol || null
-}
-
-// ── 主 handler ────────────────────────────────────────────────
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS')
   if (req.method === 'OPTIONS') return res.status(200).end()
 
-  const { codes, search } = req.query
+  const { codes, search, debug } = req.query
 
   if (search) {
     res.setHeader('Cache-Control', 's-maxage=3600')
@@ -123,20 +90,22 @@ export default async function handler(req, res) {
   }
 
   if (!codes) return res.status(400).json({ error: 'codes required' })
-  res.setHeader('Cache-Control', 's-maxage=3600, stale-while-revalidate=1800')
+  res.setHeader('Cache-Control', 'no-store') // debug 期間關快取
 
   const codeList = codes.split(',').map(s => s.trim()).filter(Boolean)
 
   const results = await Promise.all(codeList.map(async code => {
     const empty = { code, name: null, price: null, date: null, source: null }
     try {
-      let yahooSym = CODE_TO_YAHOO[code.toUpperCase()]
-      if (!yahooSym) {
-        yahooSym = await searchYahooSymbol(code)
-      }
+      const yahooSym = CODE_TO_YAHOO[code.toUpperCase()]
       if (!yahooSym) return empty
 
-      const nav = await fetchYahooNav(yahooSym)
+      const data = await fetchYahooRaw(yahooSym)
+
+      // debug 模式：回傳完整 response
+      if (debug) return { code, yahooSym, raw: data }
+
+      const nav = extractPrice(data)
       if (nav) return { code, ...nav, source: 'yahoo' }
     } catch (e) {
       console.error(`[fund-nav] ${code} error:`, e.message)
